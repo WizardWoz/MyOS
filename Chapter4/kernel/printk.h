@@ -1,6 +1,9 @@
 /*position结构体：存储屏幕信息，记录当前屏幕分辨率、字符光标所在位置、
   字符像素矩阵尺寸、帧缓冲区起始地址和帧缓冲区容量大小
 */
+#include <stdarg.h>
+#include "font.h"
+#include "linkage.h"
 struct position
 {
     int XResolution;    //屏幕横向分辨率

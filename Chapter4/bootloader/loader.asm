@@ -108,7 +108,8 @@ Label_Search_In_Root_Dir_Begin:
     call Func_ReadOneSector     ;读入属于根目录的第一个扇区；call指令等同于push IP；jmp Func_ReadOneSector
     mov si,KernelFileName       ;将kernel.bin文件名标号所在地址放入si，源数据地址为DS:SI=KernelFileName标号地址
     mov di,8000h                ;要比对的FAT目录项名称数据地址为ES:DI=08000H
-    cld                         ;因为后面用到lodsb指令（与DF标志位有关），所以清除DF标志位
+    ;因为后面用到lodsb指令（与DF标志位有关），所以清除DF方向标志位，确保从内存区域的开头开始逐个加载数据到累加器（正向加载）
+    cld
     mov dx,10h                  ;DX=每个扇区可容纳FAT12目录项个数=512/32=16=0x10
 ;=======在第一个扇区内依据文件名“KERNEL  BIN”搜索每个FAT12目录项
 Label_Search_For_KernelBin:
@@ -511,7 +512,7 @@ GO_TO_TMP_Protect:
 	mov	esp,7E00h   ;ESP=0x00007E00
     ;jmp $   ;调试用（已成功），处理器暂停在此，Bochs虚拟机中输入Ctrl+C，然后再输入sreg查看当前段寄存器
 	call support_long_mode  ;测试处理器是否支持64位长模式
-    ;TEST指令执行op1和op2之间的按位逻辑AND运算。运算结果本身会被丢弃，但以下标志位会根据运算结果进行设置
+    ;TEST指令（32/64位模式下）执行op1和op2之间的按位逻辑AND运算。运算结果本身会被丢弃，但以下标志位会根据运算结果进行设置
     ;ZF：EAX=0则为1，EAX!=0则为0；SF：与结果最高位相同；PF：运算结果低8位包含偶数个1则为1，否则为0；CF、OF：为0；AF：未定义
 	test eax,eax
 	jz not_support_long_mode    ;若EAX=0，ZF=1则处理器不支持IA-32e
