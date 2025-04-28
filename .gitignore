@@ -1,6 +1,6 @@
 #忽略VSCode配置相关的文件夹
 .vscode/
-# 忽略编译产生的文件
-*.o
+#忽略编译产生的文件
+*.o,*.bin,*.img
 #忽略Git、GitHub配置相关文件夹
 .git/
