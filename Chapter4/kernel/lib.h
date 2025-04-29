@@ -264,19 +264,25 @@ inline void * memset(void * Address,unsigned char C,long Count)
 	__asm__	__volatile__	(	"cld	\n\t"
 	//rep指令前缀修改其后跟随的字符串操作指令的重复次数（由CX/ECX/RCX决定），并重复执行字符串操作直至CX/ECX/RCX=0
 					"rep	\n\t"
-	//stosq：将RAX寄存器（存放tmp变量）中的1个四字（8个字节）存储到(ES:RDI)，RDI寄存器根据DF=0自动增加8
+	//stosq：将RAX寄存器（存放tmp变量）中的1个四字（8B）存储到(ES:RDI)，RDI寄存器根据DF=0自动增加8
 					"stosq	\n\t"
 	//testb：执行立即数4和序号占位符为3的寄存器q（存放Count）的最低3字节之间的按位逻辑AND运算，为了测试源地址块剩余内存地址空间是否为4的倍数
-					"testb	$4, %b3	\n\t"
+					"testb $4,%b3	\n\t"
 	//je 1f：若ZF=1则跳转至标号1处执行，f表示汇编器会向当前je指令之后的代码查找最近的定义为1:的标签
-					"je	1f	\n\t"
-	//stosl：将EAX寄存器中的1个双字（4个字节）存储到(ES:RDI)，RDI寄存器根据DF=0自动增加4
+					"je 1f	\n\t"
+	//stosl：将EAX寄存器中的1个双字（4B）存储到(ES:RDI)，RDI寄存器根据DF=0自动增加4
 					"stosl	\n\t"
-					"1:\ttestb	$2, %b3	\n\t"
-					"je	2f\n\t"
+	//testb：执行立即数2和序号占位符为3的寄存器q（存放Count）的最低3字节之间的按位逻辑AND运算，为了测试源地址块剩余内存地址空间是否为2的倍数
+					"1:\ttestb $2,%b3	\n\t"
+	//je 2f：若ZF=1则跳转至标号2处执行，f表示汇编器会向当前je指令之后的代码查找最近的定义为2:的标签
+					"je 2f\n\t"
+	//stosw：将EAX寄存器中的1个字（2B）存储到(ES:RDI)，RDI寄存器根据DF=0自动增加2
 					"stosw	\n\t"
-					"2:\ttestb	$1, %b3	\n\t"
-					"je	3f	\n\t"
+	//testb：执行立即数1和序号占位符为3的寄存器q（存放Count）的最低3字节之间的按位逻辑AND运算，为了测试源地址块剩余内存地址空间是否为1的倍数
+					"2:\ttestb $1,%b3	\n\t"
+	//je 3f：若ZF=1则跳转至标号3处执行，f表示汇编器会向当前je指令之后的代码查找最近的定义为3:的标签
+					"je 3f	\n\t"
+	//stosw：将EAX寄存器中的1个字节（1B）存储到(ES:RDI)，RDI寄存器根据DF=0自动增加1
 					"stosb	\n\t"
 					"3:	\n\t"
 	//输出约束：执行完指令后，更新RCX并存入C语言变量d0；更新RDI并存入C语言变量d1
@@ -291,9 +297,9 @@ inline void * memset(void * Address,unsigned char C,long Count)
 
 /*字符串复制函数（到达源字符串末尾'\0'自动停止）
   函数参数：
-  1.char* Dest：目的内存块起始地址
-  2.char* Src：源内存块起始地址
-  函数返回值：char*，指向目的内存块起始地址char* Dest
+  1.char* Dest：目的字符串起始地址
+  2.char* Src：源字符串起始地址
+  函数返回值：char*，指向目的字符串起始地址char* Dest
 */
 inline char * strcpy(char * Dest,char * Src)
 {
@@ -304,10 +310,10 @@ inline char * strcpy(char * Dest,char * Src)
 					"lodsb	\n\t"
 	//将AL寄存器的1个字节数据存放到(ES:RDI)，RDI寄存器根据DF=0自动增加1
 					"stosb	\n\t"
-	//检查AL寄存器是否为零，而不改变原始数据
-					"testb	%%al,	%%al	\n\t"
+	//检查AL寄存器是否为零（C语言标准中字符串最后的结束符为'\0'），而不改变原始数据
+					"testb %%al,%%al	\n\t"
 	//若AL!=0，则向前跳转至标号1处继续执行
-					"jne	1b	\n\t"
+					"jne 1b	\n\t"
 	//输出约束：无
 					:
 	//输入约束：执行指令前，将Src值存入RSI作为源内存块起始地址；将Dest值存入RDI作为目的内存块起始地址
@@ -319,222 +325,355 @@ inline char * strcpy(char * Dest,char * Src)
 }
 
 /*字符串复制函数（函数参数规定复制长度）
-  
+  函数参数：
+  1.char* Dest：目的字符串起始地址
+  2.char* Src：源字符串起始地址
+  3.long Count：需要复制的字符串长度
+  函数返回值：char*，指向目的字符串起始地址char* Dest
 */
 inline char * strncpy(char * Dest,char * Src,long Count)
 {
+	//CLD设置DF=0时，字符串指令在处理内存地址时会自动增加索引寄存器的值，即从低地址向高地址处理
 	__asm__	__volatile__	(	"cld	\n\t"
 					"1:	\n\t"
-					"decq	%2	\n\t"
-					"js	2f	\n\t"
+	//decq：DEC指令的四字（操作数长度为8B）版本，作用是将其操作数的值减去1，此处是将RCX-1
+					"decq %2	\n\t"
+	//如果符号标志位SF=1（通常表示前一个算术或逻辑运算的结果为负），则程序将向后跳转到最近的标签2处继续执行，意味着RCX<0，跳出循环
+					"js 2f	\n\t"
+	//RCX-1>0，继续进入循环，将(DS:RSI)的1个字节数据存放到AL寄存器中，RSI寄存器根据DF=0自动增加1
 					"lodsb	\n\t"
+	//将AL寄存器的1个字节数据存放到(ES:RDI)，RDI寄存器根据DF=0自动增加1
 					"stosb	\n\t"
-					"testb	%%al,	%%al	\n\t"
-					"jne	1b	\n\t"
+	//检查AL寄存器是否为零（C语言标准中字符串最后的结束符为'\0'），而不改变原始数据
+					"testb %%al,%%al	\n\t"
+	//若AL!=0，则向前跳转至标号1处继续执行
+					"jne 1b	\n\t"
+	//AL=0但是RCX!=0，意味着已经到达Src所指向的源字符串末尾，需要用'\0'填充Dest目标字符串的剩余长度
 					"rep	\n\t"
+	//将AL寄存器（AL=0）的1个字节数据存放到(ES:RDI)，RDI寄存器根据DF=0自动增加1
 					"stosb	\n\t"
 					"2:	\n\t"
+	//输出约束：无
 					:
+	//输入约束：指令执行前，将Src指针存入RSI；将Dest指针存入RDI，将Count传入RCX作为循环次数
 					:"S"(Src),"D"(Dest),"c"(Count)
+	//损坏描述：无
 					:					
 				);
 	return Dest;
 }
 
-/*
-		string cat Dest + Src
+/*字符串拼接函数（到达需要拼接的字符串末尾则停止）
+  函数参数：
+  1.char* Dest：目的字符串起始地址
+  2.char* Src：源字符串起始地址
+  函数返回值：char*，指向目的字符串起始地址char* Dest
 */
 inline char * strcat(char * Dest,char * Src)
 {
+	//CLD设置DF=0时，字符串指令在处理内存地址时会自动增加索引寄存器的值，即从低地址向高地址处理
 	__asm__	__volatile__	(	"cld	\n\t"
+	//根据计数寄存器（RCX）和零标志位（ZF）的状态，当RCX!=0且ZF!=1时重复执行紧随其后的字符串指令scasb
+	//目的是找到Dest复制目的地的字符串末尾
 					"repne	\n\t"
+	//将AL寄存器（初始时AL=0）中的1个字节数据与(ES:RDI)的1个字节数据进行比较。实质是执行AL-(ES:RDI)并更新标志位，不保存结果
+	//影响的寄存器与cmp指令类似，ZF：如果累加器值与内存数据相等ZF=1，否则ZF=0；SF：如果比较结果为负SF=1，否则SF=0；CF：如果比较发生借位CF=1，否则CF=0
 					"scasb	\n\t"
-					"decq	%1	\n\t"
+	//decq：DEC指令的四字（操作数长度为8B）版本，作用是将其操作数的值减去1，此处是将Dest-1以去掉末尾'\0'，指针向前移动一个位置
+					"decq %1	\n\t"
 					"1:	\n\t"
+	//此时已经找到Dest目的字符串末尾ES:RDI，Src需要复制的字符串仍是头部DS:RSI
+	//将(DS:RSI)的1个字节数据存放到AL寄存器中，RSI寄存器根据DF=0自动增加1
 					"lodsb	\n\t"
+	//将AL寄存器的1个字节数据存放到(ES:RDI)，RDI寄存器根据DF=0自动增加1
 					"stosb	\n\r"
-					"testb	%%al,	%%al	\n\t"
-					"jne	1b	\n\t"
+	//检查AL寄存器是否为零（C语言标准中字符串最后的结束符为'\0'），而不改变原始数据
+					"testb %%al,%%al	\n\t"
+	//若AL!=0，则向前跳转至标号1处继续执行
+					"jne 1b	\n\t"
+	//输出约束：无
 					:
+	//输入约束：指令执行前，将Src存入RSI；将Dest存入RDI；将0存入RAX；将0xFFFFFFFF存入RCX作为字符串长度上限
 					:"S"(Src),"D"(Dest),"a"(0),"c"(0xffffffff)
+	//损坏描述：无
 					:					
 				);
 	return Dest;
 }
 
-/*
-		string compare FirstPart and SecondPart
-		FirstPart = SecondPart =>  0
-		FirstPart > SecondPart =>  1
-		FirstPart < SecondPart => -1
+/*字符串比较函数（比较到字符串末尾为止）
+  函数参数：
+  1.char* FirstPart：第一个字符串起始地址
+  2.char* SecondPart：第二个字符串起始地址
+  函数返回值：int，第一个字符串=第二个字符串为0；第一个字符串>第二个字符串为1；第一个字符串<第二个字符串为-1
 */
-
 inline int strcmp(char * FirstPart,char * SecondPart)
 {
 	register int __res;
+	//CLD设置DF=0时，字符串指令在处理内存地址时会自动增加索引寄存器的值，即从低地址向高地址处理
 	__asm__	__volatile__	(	"cld	\n\t"
 					"1:	\n\t"
+	//ZF=1，继续进入循环，将(DS:RSI)（SecondPart字符串）的1个字节数据存放到AL寄存器中，RSI寄存器根据DF=0自动增加1
 					"lodsb	\n\t"
+	//将AL寄存器中的1个字节数据与(ES:RDI)（FirstPart字符串）的1个字节数据进行比较。实质是执行SecondPart-FirstPart并更新标志位，不保存结果
+	//影响的寄存器与cmp指令类似，ZF：如果累加器值与内存数据相等ZF=1，否则ZF=0；SF：如果比较结果为负SF=1，否则SF=0；CF：如果比较发生借位CF=1，否则CF=0
 					"scasb	\n\t"
-					"jne	2f	\n\t"
-					"testb	%%al,	%%al	\n\t"
-					"jne	1b	\n\t"
-					"xorl	%%eax,	%%eax	\n\t"
-					"jmp	3f	\n\t"
+	//ZF=0（即FirstPart!=SecondPart），跳出循环，往后跳转至标号2处继续执行
+					"jne 2f	\n\t"
+	//检查AL寄存器是否为零（C语言标准中字符串最后的结束符为'\0'），而不改变原始数据
+					"testb %%al,%%al	\n\t"
+	//ZF!=1也即AL!=0，说明还未到达SecondPart字符串末尾，往前跳转至标号1处继续执行
+					"jne 1b	\n\t"
+	//EAX寄存器与自身作异或运算，将EAX设置为0
+					"xorl %%eax,%%eax	\n\t"
+	//EAX=0，往后跳转至标号3处继续执行
+					"jmp 3f	\n\t"
 					"2:	\n\t"
-					"movl	$1,	%%eax	\n\t"
-					"jl	3f	\n\t"
-					"negl	%%eax	\n\t"
+	//EAX=1
+					"movl $1,%%eax	\n\t"
+	//如果SecondPart-FirstPart<0，也即FirstPart>SecondPart，则保持EAX=1并向后跳转至标号3处继续执行
+					"jl 3f	\n\t"
+	//如果SecondPart-FirstPart>0，也即FirstPart<SecondPart，则EAX=-1
+					"negl %%eax	\n\t"
 					"3:	\n\t"
+	//输出约束：相关指令执行后，将结果存入EAX（只写），再将EAX存入int __res
 					:"=a"(__res)
+	//输入约束：指令执行前，将FirstPart指针值存入RDI，将SecondPart指针值存入RSI
 					:"D"(FirstPart),"S"(SecondPart)
-					:					
+	//损坏描述：无
+					:				
 				);
 	return __res;
 }
 
-/*
-		string compare FirstPart and SecondPart with Count Bytes
-		FirstPart = SecondPart =>  0
-		FirstPart > SecondPart =>  1
-		FirstPart < SecondPart => -1
+/*字符串比较函数（比较Count数目个字符为止）
+  函数参数：
+  1.char* FirstPart：第一个字符串起始地址
+  2.char* SecondPart：第二个字符串起始地址
+  3.long Count：需比较的字符串长度
+  函数返回值：int，第一个字符串=第二个字符串为0；第一个字符串>第二个字符串为1；第一个字符串<第二个字符串为-1
 */
 
 inline int strncmp(char * FirstPart,char * SecondPart,long Count)
 {	
 	register int __res;
+	//CLD设置DF=0时，字符串指令在处理内存地址时会自动增加索引寄存器的值，即从低地址向高地址处理
 	__asm__	__volatile__	(	"cld	\n\t"
 					"1:	\n\t"
-					"decq	%3	\n\t"
-					"js	2f	\n\t"
+	//decq：DEC指令的四字（操作数长度为8B）版本，作用是将其操作数的值减去1，此处是将RCX-1
+					"decq %3	\n\t"
+	//如果符号标志位SF=1（通常表示前一个算术或逻辑运算的结果为负），则程序将向后跳转到最近的标签2处继续执行，意味着RCX<0，跳出循环
+					"js 2f	\n\t"
+	//将(DS:RSI)（SecondPart字符串）的1个字节数据存放到AL寄存器中，RSI寄存器根据DF=0自动增加1
 					"lodsb	\n\t"
+	//将AL寄存器中的1个字节数据与(ES:RDI)（FirstPart字符串）的1个字节数据进行比较。实质是执行SecondPart-FirstPart并更新标志位，不保存结果
 					"scasb	\n\t"
-					"jne	3f	\n\t"
-					"testb	%%al,	%%al	\n\t"
-					"jne	1b	\n\t"
+	//ZF=0（即FirstPart!=SecondPart），跳出循环，往后跳转至标号3处继续执行
+					"jne 3f	\n\t"
+	//检查AL寄存器是否为零（C语言标准中字符串最后的结束符为'\0'），而不改变原始数据
+					"testb %%al,%%al	\n\t"
+	//ZF!=1也即AL!=0，说明还未到达SecondPart字符串末尾，往前跳转至标号1处继续执行
+					"jne 1b	\n\t"
 					"2:	\n\t"
-					"xorl	%%eax,	%%eax	\n\t"
-					"jmp	4f	\n\t"
+	//EAX寄存器与自身作异或运算，将EAX设置为0
+					"xorl %%eax,%%eax	\n\t"
+	//此时RCX=0，且EAX=0，证明FirstPart=SecondPart，往后跳转至标号4处继续执行
+					"jmp 4f	\n\t"
 					"3:	\n\t"
-					"movl	$1,	%%eax	\n\t"
+	//EAX=1
+					"movl $1,%%eax	\n\t"
+	//如果SecondPart-FirstPart<0，也即FirstPart>SecondPart，则保持EAX=1并向后跳转至标号4处继续执行
 					"jl	4f	\n\t"
-					"negl	%%eax	\n\t"
+	//如果SecondPart-FirstPart>0，也即FirstPart<SecondPart，则EAX=-1
+					"negl %%eax	\n\t"
 					"4:	\n\t"
+	//输出约束：相关指令执行后，将结果存入EAX，再将EAX存入int __res
 					:"=a"(__res)
+	//输入约束：所有指令执行前，将FirstPart指针值存入RDI；将SecondPart指针值存入RSI；将Count值存入RCX作为循环次数
 					:"D"(FirstPart),"S"(SecondPart),"c"(Count)
+	//损坏描述：无
 					:
 				);
 	return __res;
 }
 
-/*
-
+/*求字符串长度
+  函数参数：
+  1.char* String：所指向字符串的首地址
+  函数返回值：int，该字符串总长度
 */
-
 inline int strlen(char * String)
 {
 	register int __res;
+	//CLD设置DF=0时，字符串指令在处理内存地址时会自动增加索引寄存器的值，即从低地址向高地址处理
 	__asm__	__volatile__	(	"cld	\n\t"
+	//根据计数寄存器（RCX）和零标志位（ZF）的状态，当RCX!=0且ZF!=1时重复执行紧随其后的字符串指令scasb
+	//目的是找到String字符串末尾'\0'
 					"repne	\n\t"
+	//将AL寄存器（AL=0）中的1个字节数据与(ES:RDI)（String字符串）的1个字节数据进行比较。实质是执行AL-String并更新标志位，不保存结果
+	//影响的寄存器与cmp指令类似，ZF：如果累加器值与内存数据相等ZF=1，否则ZF=0；SF：如果比较结果为负SF=1，否则SF=0；CF：如果比较发生借位CF=1，否则CF=0
 					"scasb	\n\t"
-					"notl	%0	\n\t"
-					"decl	%0	\n\t"
+	//notl：对序号占位符0代表的ECX寄存器进行按位取反操作
+					"notl %0	\n\t"
+	//decl：对序号占位符0代表的ECX寄存器进行ECX-1操作（不计算末尾'\0'字符）
+					"decl %0	\n\t"
+	//输出约束：相关指令执行后，结果存放至ECX，再将ECX存放至int __res
 					:"=c"(__res)
+	//输入约束：所有指令执行前，将String指针值存放至RDX；将0存放至RAX，将0xFFFFFFFF存放至ECX作为字符串长度上限
 					:"D"(String),"a"(0),"0"(0xffffffff)
+	//损坏描述：无
 					:
 				);
 	return __res;
 }
 
-/*
-
+/*设置内存块的某个位为1
+  函数参数：
+  1.unsigned long* addr：内存块首地址指针
+  2.unsigned long nr：需要设置的位的位置
+  函数返回值：unsigned long，设置后的值
 */
 inline unsigned long bit_set(unsigned long * addr,unsigned long nr)
 {
 	return *addr | (1UL << nr);
 }
 
-/*
-
+/*获取某个内存块的位的值
+  函数参数：
+  1.unsigned long* addr：内存块首地址指针
+  2.unsigned long nr：需要获取具体值的位的位置
+  函数返回值：unsigned long，获取到的位的值
 */
-
 inline unsigned long bit_get(unsigned long * addr,unsigned long nr)
 {
 	return	*addr & (1UL << nr);
 }
 
-/*
-
+/*清除内存块中的某个位，使其为0
+  函数参数：
+  1.unsigned long* addr：内存块首地址指针
+  2.unsigned long nr：需要获取具体值的位的位置
+  函数返回值：unsigned long，将某个位取0后的addr指向的内存块所存储的值
 */
-
 inline unsigned long bit_clean(unsigned long * addr,unsigned long nr)
 {
 	return	*addr & (~(1UL << nr));
 }
 
-/*
-
+/*从设备端口读入8位（1B）数据
+  函数参数：
+  1.unsigned short port：16位设备端口号（0～65535）
+  函数返回值：unsigned char，存放从设备端口读出的1B数据
 */
-
 inline unsigned char io_in8(unsigned short port)
 {
 	unsigned char ret = 0;
+	//inb：从指定的端口port（DX）读入1B数据到AL
 	__asm__ __volatile__(	"inb	%%dx,	%0	\n\t"
+	//mfence：Memory Fence（内存栅栏）用于强制内存操作的顺序性
+	//lfence (Load Fence): 只保证在 lfence 之前的加载操作在之后的加载操作之前完成。不保证存储操作的顺序。
+	//sfence (Store Fence): 只保证在 sfence 之前的存储操作在之后的存储操作之前完成。不保证加载操作的顺序。
+	//mfence (Memory Fence): 保证在 mfence 之前的所有加载和存储操作在之后的所有加载和存储操作之前完成。它是 lfence 和 sfence 功能的集合
+	//主要用于需要严格控制内存访问顺序的底层代码，包括：多线程库和同步原语的实现（如互斥锁、读写锁、条件变量）；无锁数据结构（Lock-Free Data Structures）的实现。设备驱动程序中与内存映射 I/O 端口的交互。
 				"mfence			\n\t"
+	//输出部分：相关指令执行后，将结果存入AL，并将AL存入unsigned char ret
 				:"=a"(ret)
+	//输入部分：所有指令执行前，将port存入DX
 				:"d"(port)
+	//损坏描述：访问内存映射IO需要memory声明
 				:"memory");
 	return ret;
 }
 
-/*
-
+/*从设备端口读入32位（4B）数据
+  函数参数：
+  1.unsigned short port：16位设备端口号（0～65535）
+  函数返回值：unsigned int，存放从设备端口读出的4B数据
 */
-
 inline unsigned int io_in32(unsigned short port)
 {
 	unsigned int ret = 0;
-	__asm__ __volatile__(	"inl	%%dx,	%0	\n\t"
-				"mfence			\n\t"
+	//inl：从指定的端口port（DX）读入4B数据到序号占位符0代表的寄存器EAX（只写）
+	__asm__ __volatile__(	"inl %%dx,%0	\n\t"
+				"mfence	\n\t"
+	//输出部分：相关指令执行后，将结果存入EAX，并将EAX存入unsigned int ret
 				:"=a"(ret)
+	//输入部分：所有指令执行前，将port存入DX
 				:"d"(port)
+	//损坏描述：访问内存映射IO需要memory声明
 				:"memory");
 	return ret;
 }
 
-/*
-
+/*将8位（1B）数据输出到设备端口
+  函数参数：
+  1.unsigned short port：16位设备端口号（0～65535）
+  2.unsigned char value：需要输出的1B数据
+  函数返回值：void
 */
-
 inline void io_out8(unsigned short port,unsigned char value)
 {
-	__asm__ __volatile__(	"outb	%0,	%%dx	\n\t"
-				"mfence			\n\t"
+	//outb：将序号占位符0代表的寄存器AL存储的内容输出到DX代表的端口处
+	__asm__ __volatile__(	"outb %0,%%dx	\n\t"
+				"mfence	\n\t"
+	//输出部分：无
 				:
+	//输入部分：所有指令执行前，将value存入AL，将port存入DX
 				:"a"(value),"d"(port)
+	//损坏描述：访问内存映射IO需要memory声明
 				:"memory");
 }
 
-/*
-
+/*函数：将32位（4B）数据输出到设备端口
+  函数参数：
+  1.unsigned short port：16位设备端口号（0～65535）
+  2.unsigned int value：需要输出的4B数据
+  函数返回值：void
 */
-
 inline void io_out32(unsigned short port,unsigned int value)
 {
-	__asm__ __volatile__(	"outl	%0,	%%dx	\n\t"
+	//outl：将序号占位符0代表的寄存器EAX存储的内容输出到DX代表的端口处
+	__asm__ __volatile__(	"outl %0,%%dx	\n\t"
 				"mfence			\n\t"
+	//输出部分：无
 				:
+	//输入部分：所有指令执行前，将value存入EAX，将port存入DX
 				:"a"(value),"d"(port)
+	//损坏描述：访问内存映射IO需要memory声明
 				:"memory");
 }
 
-/*
+/*宏定义：从port端口读入buffer指向的内存块中的nr*2字节数据
+  参数：
+  1.port：16位设备端口号（0～65535）
+  2.buffer：64位指针，指向源内存块
+  3.nr：需要从源内存块读取的字数
 
+  指令部分：
+  1.cld：设置DF=0时，字符串指令在处理内存地址时会自动增加索引寄存器的值，即从低地址向高地址处理
+  2.rep：修改其后跟随的字符串操作指令的重复次数（由RCX决定），并重复执行字符串操作直至RCX=0
+  3.insw：从DX寄存器指定的I/O端口读取1个字（2B）数据，并存储到(ES:RDI)，执行后RDI寄存器根据DF=0自动增加2
+  输出部分：无
+  输入部分：所有指令执行前，将port存入DX，将buffer存入RDI，将nr存入RCX作为循环次数
+  损坏描述：访问内存映射IO需要memory声明
 */
-
 #define port_insw(port,buffer,nr)	\
 __asm__ __volatile__("cld;rep;insw;mfence;"::"d"(port),"D"(buffer),"c"(nr):"memory")
 
+/*宏定义：将nr*2字节数据从port端口输出到buffer指向的内存块中
+  参数：
+  1.port：16位设备端口号（0～65535）
+  2.buffer：64位指针，指向目的内存块
+  3.nr：需要写入目标内存块的字数
+
+  指令部分：
+  1.cld：设置DF=0时，字符串指令在处理内存地址时会自动增加索引寄存器的值，即从低地址向高地址处理
+  2.rep：修改其后跟随的字符串操作指令的重复次数（由RCX决定），并重复执行字符串操作直至RCX=0
+  3.outsw：从(DS:RSI)读取1个字（2个字节）数据，并写入到DX寄存器指定的I/O端口，执行后RSI寄存器根据DF=0自动增加2
+  输出部分：无
+  输入部分：所有指令执行前，将port存入DX，将buffer存入RSI，将nr存入RCX作为循环次数
+  损坏描述：访问内存映射IO需要memory声明
+*/
 #define port_outsw(port,buffer,nr)	\
 __asm__ __volatile__("cld;rep;outsw;mfence;"::"d"(port),"S"(buffer),"c"(nr):"memory")
 
