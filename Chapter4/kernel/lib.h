@@ -517,11 +517,11 @@ inline int strlen(char * String)
 					"scasb	\n\t"
 	//notl：对序号占位符0代表的ECX寄存器进行按位取反操作
 					"notl %0	\n\t"
-	//decl：对序号占位符0代表的ECX寄存器进行ECX-1操作（不计算末尾'\0'字符）
+	//decl：对序号占位符0代表的ECX寄存器进行ECX-1操作（不计算末尾'\0'字符），得到真正的字符串长度
 					"decl %0	\n\t"
 	//输出约束：相关指令执行后，结果存放至ECX，再将ECX存放至int __res
 					:"=c"(__res)
-	//输入约束：所有指令执行前，将String指针值存放至RDX；将0存放至RAX，将0xFFFFFFFF存放至ECX作为字符串长度上限
+	//输入约束：所有指令执行前，将String指针值存放至RDX；将0存放至RAX，将0xFFFFFFFF存放至ECX（初始值为负数）
 					:"D"(String),"a"(0),"0"(0xffffffff)
 	//损坏描述：无
 					:

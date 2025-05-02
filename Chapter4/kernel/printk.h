@@ -16,6 +16,8 @@
 #define SPECIAL	32		/* 0x */
 #define SMALL	64		/* use 'abcdef' instead of 'ABCDEF' */
 
+/*宏函数：判断当前字符是否是0~9以内的数字
+*/
 #define is_digit(c)	((c) >= '0' && (c) <= '9')
 
 #define WHITE 	0x00ffffff		//白
