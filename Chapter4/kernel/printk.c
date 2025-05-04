@@ -59,82 +59,149 @@ void putchar(unsigned int *fb, int Xsize, int x, int y, unsigned int FRcolor, un
     }
 }
 
-/*
-
+/*只能将数值字母转换为整数值
+  函数参数：
+  1.const char **s：指向存放字符串首地址的内存位置的指针
+  函数返回值：int，当前字符转换成的整数值
 */
 int skip_atoi(const char **s)
 {
     int i = 0;
-
+    //判断当前字符是否为数值字母'0'~'9'，如果是才进行转换
     while (is_digit(**s))
-        i = i * 10 + *((*s)++) - '0';
+        i = i * 10 + *((*s)++) - '0';//i是目前已转换的整数值，因为读入方向是从左往右，所以最新读入的数值位一定是个位
     return i;
 }
 
-/*
-
+/*static关键字用于函数定义时，它改变了函数的链接性，从默认的外部链接改变为内部链接
+  1.作用域限制在当前文件：只能在其定义的源文件内部被调用。它对其他源文件是不可见的，就像一个私有函数
+  2.不会引起命名冲突：不同的源文件可以定义同名的static函数且互不影响，因为它们的名称不会被导出到链接器符号表中供其他文件使用
+  使用static函数的原因和好处：
+  1.隐藏模块的内部实现细节，只暴露那些非static的公共函数作为模块的接口，提高了代码的组织性和可维护性
+  2.可以有效避免命名冲突，只在文件内部使用的函数声明为static。不同的开发者可能无意中使用了相同的函数名。
+  如果这些函数都被声明为全局（非 static），在链接阶段就会发生命名冲突错误
+  3.为编译器提供潜在的优化机会，像inline内联函数那样
 */
-static char *number(char *str, long num, int base, int size, int precision, int type)
-{
-    char c, sign, tmp[50];
-    const char *digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    int i;
 
-    if (type & SMALL)
-        digits = "0123456789abcdefghijklmnopqrstuvwxyz";
-    if (type & LEFT)
-        type &= ~ZEROPAD;
-    if (base < 2 || base > 36)
-        return 0;
-    c = (type & ZEROPAD) ? '0' : ' ';
-    sign = 0;
-    if (type & SIGN && num < 0)
+/*可将整数值按照指定规格转换成字符串
+  函数参数：
+  1.char *str：指向最终转换后的字符串的指针
+  2.long num：需转换的整数值自身
+  3.int base：整数值的进制规格
+  4.int size：数据区的宽度
+  5.int precision：数据精度
+  6.int type：记录数据区域的数据字符串类型；用'0'还是用' '对齐；字母大/小写
+  函数返回值：char *，指向最终转换后的字符串的str指针
+*/
+static char* number(char *str,long num,int base,int size,int precision,int type)
+{
+    //char c：记录数据区域用'0'还是用' '对齐
+    //char sign：记录整数的正负性
+    //char tmp[50]：暂时存放转换后的数据字符串
+    char c,sign,tmp[50];
+    const char *digits="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    int i;      //tmp的下标
+
+    if (type&SMALL)     //如果英文字母要使用小写
     {
-        sign = '-';
-        num = -num;
+        digits="0123456789abcdefghijklmnopqrstuvwxyz";
+    }
+    if (type&LEFT)      //如果数据字符串要左对齐
+    {
+        type&=~ZEROPAD; //ZEROPAD=1，~ZEROPAD=0，type=0
+    }
+    if (base<2||base>36)//只支持2进制至36进制的数值转换
+    {
+        return 0;       //超过进制范围则返回0
+    }
+    c=(type&ZEROPAD)?'0':' ';//type=ZEROPAD（使用字符'0'填充）则c='0'；否则c=' '
+    sign=0;
+    if(type&SIGN&&num<0)//如果type=SIGN即num为有符号负数
+    {
+        sign='-';       //sign符号标志='-'
+        num=-num;       //负数num转为正数
     }
     else
-        sign = (type & PLUS) ? '+' : ((type & SPACE) ? ' ' : 0);
-    if (sign)
-        size--;
-    if (type & SPECIAL)
-        if (base == 16)
-            size -= 2;
-        else if (base == 8)
-            size--;
-    i = 0;
-    if (num == 0)
-        tmp[i++] = '0';
-    else
-        while (num != 0)
-            tmp[i++] = digits[do_div(num, base)];
-    if (i > precision)
-        precision = i;
-    size -= precision;
-    if (!(type & (ZEROPAD + LEFT)))
-        while (size-- > 0)
-            *str++ = ' ';
-    if (sign)
-        *str++ = sign;
-    if (type & SPECIAL)
-        if (base == 8)
-            *str++ = '0';
-        else if (base == 16)
+    {
+        //num并非有符号负数，判断是否是有符号正数；若是则sign='+'；若不是则判断使用哪种字符填充
+        sign=(type&PLUS)?'+':((type&SPACE)?' ':0);
+    }
+    if (sign)       //符号标志设置好了
+    {
+        size--;     //数据区宽度-1
+    }
+    if (type&SPECIAL)   //数据区字符串类型type=SPECIAL（十六进制或八进制）
+    {
+        if (base==16)   //十六进制
         {
-            *str++ = '0';
-            *str++ = digits[33];
+            size-=2;    //数据区宽度-2
         }
-    if (!(type & LEFT))
-        while (size-- > 0)
-            *str++ = c;
-
-    while (i < precision--)
-        *str++ = '0';
-    while (i-- > 0)
-        *str++ = tmp[i];
-    while (size-- > 0)
-        *str++ = ' ';
-    return str;
+        else if (base==8)//八进制
+        {
+            size--;     //数据区宽度-1
+        }
+    }
+    i=0;                //tmp的下标
+    if (num==0)         //数据num=0
+    {
+        tmp[i++]='0';   //直接在tmp内存放字符'0'
+    }
+    else
+    {
+        while (num!=0)  //数据num!=0
+        {
+            //将数据num的每个数位提取出来，作为digits字符串下标取出相应字符，并写入tmp
+            tmp[i++]=digits[do_div(num,base)];
+        }
+    }
+    if (i>precision)    //当前字符串长度已超过数据所需精度
+    {
+        precision=i;    //新数据精度=当前字符串长度
+    }
+    size-=precision;    //需要字符填充的宽度=旧数据区宽度-新数据精度
+    if(!(type&(ZEROPAD+LEFT)))//字符串格式是右对齐，用' '填充
+    {
+        while (size-->0)//当需要字符填充的宽度还未填满
+        {
+            *str++=' '; //则使用' '填充数据区开始部分空隙
+        }
+    }
+    if (sign)           //字符填充完毕，在字符串数值部分前添加数符
+    {
+        *str++=sign;
+    }
+    if (type&SPECIAL)           //如果数字是特殊格式（十六进制或者八进制）
+    {
+        if (base==8)            //八进制
+        {
+            *str++='0';         //在数值字符前填充'0'
+        }
+        else if (base==16)      //十六进制
+        {
+            *str++='0';         //在数值字符前填充'0x'或者'0X'
+            *str++=digits[33];
+        }
+    }
+    if (!(type&LEFT))       //字符串格式是右对齐，用'0'填充
+    {
+        while (size-->0)    //当需要字符填充的宽度还未填满
+        {
+            *str++=c;       //则使用'0'填充数据区开始部分空隙
+        }
+    }
+    while (i<precision--)   //已转换字符串长度未达到数据精度
+    {
+        *str++='0';         //继续使用'0'填充
+    }
+    while (i-->0)
+    {
+        *str++=tmp[i];      //开始填充数据转换后对应的字符
+    }
+    while (size-->0)
+    {
+        *str++=' ';         //用' '填充数据区剩余部分
+    }
+    return str;             //返回转换成功的字符串首地址
 }
 
 /*解析color_printk函数提供的格式化字符串及其参数
@@ -146,7 +213,7 @@ static char *number(char *str, long num, int base, int size, int precision, int 
 int vsprintf(char *buf, const char *fmt, va_list args)
 {
     char *str, *s;  //str：指向缓冲区buf的指针，解析字符串时移动str；s：指向va_list可变参数args中字符串参数的指针
-    int flags;       // 记录数据区域的对齐方式：用'0'还是用' '对齐
+    int flags;       // 记录数据区域的左/右对齐方式；用'0'还是用' '对齐；字母大/小写
     int field_width; // 记录数据区域的宽度
     int precision;   // 记录数据的精度
     int len, i;     //len记录va_list可变参数args中字符串的长度，i是处理字符串复制时的下标

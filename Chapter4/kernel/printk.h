@@ -61,6 +61,19 @@ void putchar(unsigned int * fb,int Xsize,int x,int y,unsigned int FRcolor,unsign
 
 int skip_atoi(const char **s);
 
+/*宏函数：将整数值n除以进制规格base
+  参数：
+  1.n：整数值
+  2.base：进制规格
+  返回值：int __res：转换后的某个数值位对应的位数
+
+  输出部分：相关指令执行后，将商存入RAX并写入n；将余数存入RDX并写入__res作为宏函数返回值
+  输入部分：所有指令执行前，将需转换的整数值存入RAX；将0存入RDX；将进制规格base存入RCX
+  被除数：RDX:RAX；除数：RCX；商：RAX；余数：RDX
+
+  注意：如果指令部分改成divq %4理论上可行，实际编译过程中提示错误Error: Incorrect register
+  编译器为寄存器约束符选择32位寄存器而非64位
+*/
 #define do_div(n,base) ({ \
 int __res; \
 __asm__("divq %%rcx":"=a" (n),"=d" (__res):"0" (n),"1" (0),"c" (base)); \
