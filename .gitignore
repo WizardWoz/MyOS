@@ -1,8 +1,9 @@
+#忽略Git、GitHub配置相关文件夹
+.git/
 #忽略VSCode配置相关的文件夹
 .vscode/
 #忽略编译产生的文件，文件之间不能用,分隔
 *.o
 *.bin
 *.img
-#忽略Git、GitHub配置相关文件夹
-.git/
+system
