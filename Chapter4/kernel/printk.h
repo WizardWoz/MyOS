@@ -8,37 +8,39 @@
 #include "font.h"
 #include "linkage.h"
 
-#define ZEROPAD	1		/* pad with zero */
-#define SIGN	2		/* unsigned/signed long */
-#define PLUS	4		/* show plus */
-#define SPACE	8		/* space if plus */
-#define LEFT	16		/* left justified */
-#define SPECIAL	32		/* 0x */
-#define SMALL	64		/* use 'abcdef' instead of 'ABCDEF' */
+#define ZEROPAD 1  /*使用'0'填充的标志*/
+#define SIGN 2	   /*数值部分前需使用符号的标志*/
+#define PLUS 4	   /*数值部分为正数的标志*/
+#define SPACE 8	   /*如果是正数则为' '*/
+#define LEFT 16	   /*数据区左对齐标志*/
+#define SPECIAL 32 /*十六进制数值部分前使用'0x'或'0X'*/
+#define SMALL 64   /*英文字母使用小写*/
 
 /*宏函数：判断当前字符是否是0~9以内的数字
+  参数：
+  1.c：输入的单个字符
 */
-#define is_digit(c)	((c) >= '0' && (c) <= '9')
+#define is_digit(c) ((c) >= '0' && (c) <= '9')
 
-#define WHITE 	0x00ffffff		//白
-#define BLACK 	0x00000000		//黑
-#define RED	0x00ff0000		//红
-#define ORANGE	0x00ff8000		//橙
-#define YELLOW	0x00ffff00		//黄
-#define GREEN	0x0000ff00		//绿
-#define BLUE	0x000000ff		//蓝
-#define INDIGO	0x0000ffff		//靛
-#define PURPLE	0x008000ff		//紫
+#define WHITE 0x00ffffff  // 白
+#define BLACK 0x00000000  // 黑
+#define RED 0x00ff0000	  // 红
+#define ORANGE 0x00ff8000 // 橙
+#define YELLOW 0x00ffff00 // 黄
+#define GREEN 0x0000ff00  // 绿
+#define BLUE 0x000000ff	  // 蓝
+#define INDIGO 0x0000ffff // 靛
+#define PURPLE 0x008000ff // 紫
 
 /*ASCII字库文件数组
-*/
+ */
 extern unsigned char font_ascii[256][16];
 
 /*缓冲区
-*/
-char buf[4096]={0};
+ */
+char buf[4096] = {0};
 
-/*用于屏幕信息的结构体：
+/*用于屏幕信息的结构体（全局数据结构）：
   1.当前屏幕分辨率
   2.字符光标所在位置
   3.字符像素矩阵尺寸
@@ -57,7 +59,7 @@ struct position
 	unsigned long FB_length; // 帧缓冲区容量大小
 } Pos;
 
-void putchar(unsigned int * fb,int Xsize,int x,int y,unsigned int FRcolor,unsigned int BKcolor,unsigned char font);
+void putchar(unsigned int *fb, int Xsize, int x, int y, unsigned int FRcolor, unsigned int BKcolor, unsigned char font);
 
 int skip_atoi(const char **s);
 
@@ -74,15 +76,15 @@ int skip_atoi(const char **s);
   注意：如果指令部分改成divq %4理论上可行，实际编译过程中提示错误Error: Incorrect register
   编译器为寄存器约束符选择32位寄存器而非64位
 */
-#define do_div(n,base) ({ \
+#define do_div(n, base) ({ \
 int __res; \
 __asm__("divq %%rcx":"=a" (n),"=d" (__res):"0" (n),"1" (0),"c" (base)); \
 __res; })
 
-static char * number(char * str, long num, int base, int size, int precision ,int type);
+static char *number(char *str, long num, int base, int size, int precision, int type);
 
-int vsprintf(char * buf,const char *fmt, va_list args);
+int vsprintf(char *buf, const char *fmt, va_list args);
 
-int color_printk(unsigned int FRcolor,unsigned int BKcolor,const char * fmt,...);
+int color_printk(unsigned int FRcolor, unsigned int BKcolor, const char *fmt, ...);
 
 #endif
