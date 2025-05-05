@@ -46,7 +46,7 @@ entry64:
  movq $0x10,%rax
  movq %rax,%ds
  movq %rax,%es
- movq %rax,%fs
+ movq %rax,%gs
  movq %rax,%ss
  movq $0xFFFF800000007E00,%rsp
 
