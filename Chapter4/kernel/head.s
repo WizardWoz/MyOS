@@ -161,6 +161,7 @@ Loop:
  popq %rbx
  popq %rax
  iretq
+
 int_msg:
  .asciz "Unknown interrupt or fault at RIP\n"
 

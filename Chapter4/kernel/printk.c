@@ -132,11 +132,11 @@ static char *number(char *str, long num, int base, int size, int precision, int 
     }
     if (type & SPECIAL) // 数据区字符串类型type=SPECIAL（十六进制或八进制）
     {
-        if (base == 16) // 十六进制
+        if (base == 16) // 十六进制'0x'
         {
             size -= 2; // 数据区宽度-2
         }
-        else if (base == 8) // 八进制
+        else if (base == 8) // 八进制'0'
         {
             size--; // 数据区宽度-1
         }

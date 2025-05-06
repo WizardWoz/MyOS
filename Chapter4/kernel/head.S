@@ -139,8 +139,8 @@ ignore_int:
 	pushq %rax
 	//cdecl调用约定：参数从左向右顺序是RDI、RSI、RDX、RCX、R8、R9，剩余参数使用内存传递，RAX存放函数返回值，调用者负责平衡栈
 	movq %rax,%rdx				//RDX=RAX
-	movq $0x00000000,%rsi		//RSI=0x00000000
-	movq $0x00ff0000,%rdi		//RDI=0x00FF0000
+	movq $0x00000000,%rsi		//RSI=0x0000 0000 0000 0000
+	movq $0x00ff0000,%rdi		//RDI=0x0000 0000 00FF 0000
 	movq $0,%rax				//RAX=0
 	callq color_printk
 	addq $0x8,%rsp				//RSP=RSP+8，调用者负责平衡栈
@@ -166,6 +166,7 @@ Loop:
 	popq %rbx
 	popq %rax
 	iretq
+//0号异常：除零异常发生时，屏幕出现提示消息
 int_msg:
 	.asciz "Unknown interrupt or fault at RIP\n"
 //=======创建并初始化各级页表及页表项

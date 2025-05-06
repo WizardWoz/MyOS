@@ -9,10 +9,10 @@
 #include "linkage.h"
 
 #define ZEROPAD 1  /*使用'0'填充的标志*/
-#define SIGN 2	   /*数值部分前需使用符号的标志*/
-#define PLUS 4	   /*数值部分为正数的标志*/
-#define SPACE 8	   /*如果是正数则为' '*/
-#define LEFT 16	   /*数据区左对齐标志*/
+#define SIGN 2     /*数值部分前需使用符号的标志*/
+#define PLUS 4     /*数值部分为正数的标志*/
+#define SPACE 8    /*如果是正数则为' '*/
+#define LEFT 16    /*数据区左对齐标志*/
 #define SPECIAL 32 /*十六进制数值部分前使用'0x'或'0X'*/
 #define SMALL 64   /*英文字母使用小写*/
 
@@ -24,11 +24,11 @@
 
 #define WHITE 0x00ffffff  // 白
 #define BLACK 0x00000000  // 黑
-#define RED 0x00ff0000	  // 红
+#define RED 0x00ff0000    // 红
 #define ORANGE 0x00ff8000 // 橙
 #define YELLOW 0x00ffff00 // 黄
 #define GREEN 0x0000ff00  // 绿
-#define BLUE 0x000000ff	  // 蓝
+#define BLUE 0x000000ff   // 蓝
 #define INDIGO 0x0000ffff // 靛
 #define PURPLE 0x008000ff // 紫
 
@@ -49,14 +49,14 @@ char buf[4096] = {0};
 */
 struct position
 {
-	int XResolution;		 // 屏幕横向分辨率
-	int YResolution;		 // 屏幕纵向分辨率
-	int XPosition;			 // 字符光标横向坐标
-	int YPosition;			 // 字符光标纵向坐标
-	int XCharSize;			 // 字符像素矩阵横向尺寸
-	int YCharSize;			 // 字符像素矩阵纵向尺寸
-	unsigned int *FB_addr;	 // 帧缓冲区起始地址
-	unsigned long FB_length; // 帧缓冲区容量大小
+  int XResolution;         // 屏幕横向分辨率
+  int YResolution;         // 屏幕纵向分辨率
+  int XPosition;           // 字符光标横向坐标
+  int YPosition;           // 字符光标纵向坐标
+  int XCharSize;           // 字符像素矩阵横向尺寸
+  int YCharSize;           // 字符像素矩阵纵向尺寸
+  unsigned int *FB_addr;   // 帧缓冲区起始地址
+  unsigned long FB_length; // 帧缓冲区容量大小
 } Pos;
 
 void putchar(unsigned int *fb, int Xsize, int x, int y, unsigned int FRcolor, unsigned int BKcolor, unsigned char font);
