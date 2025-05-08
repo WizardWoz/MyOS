@@ -60,14 +60,14 @@ setup_IDT:
 	leaq ignore_int(%rip),%rdx		//RDX=基地址RIP+偏移地址ignore_int
 	movq $(0x08<<16),%rax			//RAX=0x08<<16=1000 0000 0000 0000 0000=0x0000 0000 0001 0000
 	movw %dx,%ax					//AX=DX
-	movq $(0x8E00<<32),%rcx			//RCX=0x8E00<<32=0x8E00 0000 0000 0000
-	addq %rcx,%rax					//RAX=RAX+RCX=0x8E00 0000 0001 0000
+	movq $(0x8E00<<32),%rcx			//RCX=0x8E00<<32=0x0000 8E00 0000 0000
+	addq %rcx,%rax					//RAX=RAX+RCX=0x0000 8E00 0001 0000
 	movl %edx,%ecx					//ECX=EDX=基地址RIP+偏移地址ignore_int
 	shrl $16,%ecx					//ECX右移16位
 	shlq $48,%rcx					//RCX左移48位，此时RCX最高16位=ECX的最高16位
-	addq %rcx,%rax					//RAX=RAX+RCX=0x8E00 0000 0001 0000+
-	shrq $32,%rdx					//RDX右移32位
-	leaq IDT_Table(%rip),%rdi		//RDI=基地址RIP+偏移地址IDT_Table
+	addq %rcx,%rax					//RAX=RAX+RCX=0x0000 8E00 0001 0000+基地址RIP+偏移地址ignore_int
+	shrq $32,%rdx					//RDX右移32位，此时EDX=RDX高32位
+	leaq IDT_Table(%rip),%rdi		//RDI=基地址RIP+偏移地址IDT_Table，也即IDT_Table在内存中的地址
 	mov $256,%rcx					//RCX=256，设置rp_sidt的循环次数
 //将256个中断描述符项统一初始化
 rp_sidt:
@@ -84,7 +84,7 @@ setup_TSS64:
 	movq $0x89,%rax					//RAX=0x0000 0000 0000 0089
 	shlq $40,%rax					//RAX左移40位=0x0000 8900 0000 0000
 	movl %edx,%ecx					//ECX=EDX
-	shrl $24,%ecx					//ECX左移24位
+	shrl $24,%ecx					//ECX右移24位
 	shlq $56,%rcx					//RCX左移56位
 	addq %rcx,%rax					//RAX=RAX+RCX=0x0000 8900 0000 0000+
 	xorq %rcx,%rcx					//RCX=0
@@ -93,7 +93,7 @@ setup_TSS64:
 	shlq $16,%rcx					//RCX左移16位
 	addq %rcx,%rax					//RAX=RAX+RCX=
 	addq $103,%rax					//RAX=RAX+103
-	leaq GDT_Table(%rip),%rdi		//RDI=基地址RIP+偏移地址GDT_Table
+	leaq GDT_Table(%rip),%rdi		//RDI=基地址RIP+偏移地址GDT_Table=GDT_Table在内存中的地址
 	movq %rax,64(%rdi)				//(RDI+64)=RAX
 	shrq $32,%rdx					//RDX右移32位
 	movq %rdx,72(%rdi)				//(RDI+72)=RDX
@@ -137,6 +137,7 @@ ignore_int:
 	movq %rax,%es				//ES=DS=RAX=0x10内核数据段
 	leaq int_msg(%rip),%rax		//RAX=基地址RIP+偏移地址int_msg
 	pushq %rax
+	//汇编语言调用C语言
 	//cdecl调用约定：参数从左向右顺序是RDI、RSI、RDX、RCX、R8、R9，剩余参数使用内存传递，RAX存放函数返回值，调用者负责平衡栈
 	movq %rax,%rdx				//RDX=RAX
 	movq $0x00000000,%rsi		//RSI=0x0000 0000 0000 0000
