@@ -432,9 +432,9 @@ int vsprintf(char *buf, const char *fmt, va_list args)
 */
 int color_printk(unsigned int FRcolor, unsigned int BKcolor, const char *fmt, ...)
 {
-    int i = 0;
-    int count = 0;
-    int line = 0;
+    int i = 0;          //格式化字符串总长度
+    int count = 0;      //当前未打印的字符数
+    int line = 0;       //\t的制表符位置对应的空格符
     // 定义va_list类型的变量：在函数内部，需要定义一个va_list类型的变量，用于存储可变参数的信息
     va_list args;
     // 使用va_start初始化va_list：在访问可变参数之前，必须调用va_start宏来初始化va_list变量。它需要两个参数：
