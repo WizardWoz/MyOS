@@ -36,7 +36,7 @@
  */
 extern unsigned char font_ascii[256][16];
 
-/*缓冲区
+/*缓冲区：所有内存单元均初始化为0
  */
 char buf[4096] = {0};
 

@@ -14,11 +14,11 @@ head.o:		head.S
 	gcc -E head.S > head.s
 	as --64 -o head.o head.s
 #为printk.c生成编译文件printk.o（编译）
-printk.o: 	printk.c lib.h
-	gcc -static  -mcmodel=large -fno-builtin -m64 -c printk.c -fno-stack-protector
+printk.o: 	printk.c
+	gcc -mcmodel=large -fno-builtin -m64 -c printk.c -fno-stack-protector
 #为main.c生成编译文件main.o（编译）
-main.o:		main.c lib.h
-	gcc -static -mcmodel=large -fno-builtin -m64 -c main.c -fno-stack-protector
+main.o:		main.c
+	gcc -mcmodel=large -fno-builtin -m64 -c main.c -fno-stack-protector
 #在重新生成.o、.bin等文件前，先执行make clean清除旧文件
 clean:
 	rm -rf *.o *.s~ *.s *.S~ *.c~ *.h~ system  Makefile~ Kernel.lds~ kernel.bin

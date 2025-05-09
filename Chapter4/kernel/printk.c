@@ -20,7 +20,7 @@
   函数参数：
   1.unsigned int * fb：帧缓冲区首地址
   2.int Xsize：屏幕横向分辨率（即屏幕单行包括的像素点数）
-  3.int x：符光标横向坐标*字符像素矩阵横向尺寸
+  3.int x：字符光标横向坐标*字符像素矩阵横向尺寸
   4.int y：字符光标纵向坐标*字符像素矩阵纵向尺寸
   5.unsigned int FRcolor：字符颜色
   6.unsigned int BKcolor：背景颜色
@@ -490,7 +490,7 @@ int color_printk(unsigned int FRcolor, unsigned int BKcolor, const char *fmt, ..
             // 假设Pos.XPosition=0，则需要绘制(0+8)&0x1000-0=8个空格；假设Pos.XPosition=1，则需要绘制(1+8)&0x1000-1=7个空格；......假设Pos.XPosition=7，则需要绘制(7+8)&0x1000-7=1个空格
             // 以此类推，Pos.XPosition=8，则需要绘制(8+8)&0x1000-8=8个空格，再次进入绘制1~8个空格的循环
             line = ((Pos.XPosition + 8) & ~(8 - 1)) - Pos.XPosition;
-        Label_tab:
+Label_tab:
             line--; // 需要填充的空格符数量-1
             putchar(Pos.FB_addr, Pos.XResolution, Pos.XPosition * Pos.XCharSize, Pos.YPosition * Pos.YCharSize,
                     FRcolor, BKcolor, ' ');
@@ -511,7 +511,7 @@ int color_printk(unsigned int FRcolor, unsigned int BKcolor, const char *fmt, ..
             Pos.YPosition++;
             Pos.XPosition = 0;
         }
-        if (Pos.YPosition >= (Pos.YPosition / Pos.YCharSize))
+        if (Pos.YPosition >= (Pos.YResolution / Pos.YCharSize))
         {
             // 当前列已写满字符，需要将字符光标纵向坐标设置为0，实际上是当前页已经写满了，进入下一页
             Pos.YPosition = 0;

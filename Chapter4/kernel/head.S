@@ -138,7 +138,8 @@ ignore_int:
 	leaq int_msg(%rip),%rax		//RAX=基地址RIP+偏移地址int_msg
 	pushq %rax
 	//汇编语言调用C语言
-	//cdecl调用约定：参数从左向右顺序是RDI、RSI、RDX、RCX、R8、R9，剩余参数使用内存传递，RAX存放函数返回值，调用者负责平衡栈
+	//cdecl调用约定：参数从左向右顺序是RDI、RSI、RDX、RCX、R8、R9，剩余参数使用内存传递，
+	//RDI保存字体颜色；RSI保存背景颜色；RDX保存待显示的字符串起始地址；RAX存放函数返回值，调用者负责平衡栈
 	movq %rax,%rdx				//RDX=RAX
 	movq $0x00000000,%rsi		//RSI=0x0000 0000 0000 0000
 	movq $0x00ff0000,%rdi		//RDI=0x0000 0000 00FF 0000
