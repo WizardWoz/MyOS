@@ -5,6 +5,7 @@
 #include "lib.h"
 #include "printk.h"
 #include "gate.h"
+#include "trap.h"
 
 void Start_Kernel(void)
 {
@@ -61,6 +62,10 @@ void Start_Kernel(void)
     }
     //打印"Hello World!"字符串，成功显示P100 图4-5
     color_printk(YELLOW,BLACK,"Hello\t\tWorld!\n");
+    load_TR(8);     //将TSS段描述符的段选择子加载到TR寄存器
+    set_tss64(0xffff800000007c00,0xffff800000007c00,0xffff800000007c00,0xffff800000007c00,0xffff800000007c00,
+    0xffff800000007c00,0xffff800000007c00,0xffff800000007c00,0xffff800000007c00,0xffff800000007c00);
+    sys_vector_init();
     //触发向量号为0的除法错误异常,成功显示P109 图4-8
     i=1/0;
     while (1)

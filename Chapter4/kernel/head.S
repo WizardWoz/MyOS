@@ -97,10 +97,13 @@ setup_TSS64:
 	movq %rax,64(%rdi)				//(RDI+64)=RAX
 	shrq $32,%rdx					//RDX右移32位
 	movq %rdx,72(%rdi)				//(RDI+72)=RDX
-	mov $0x40,%ax					//AX=0x40
+	//main.c中的load_TR(8)调用gate.h中的load_TR宏函数将TSS段描述符的段选择子加载到TR寄存器
+	//此时TR寄存器的Busy标志位=1，如果head.S中重复加载此描述符则产生#TS异常
+	//Bochs显示LTR: doesn't point to an availiable TSS descriptor!日志信息，甚至使虚拟机崩溃
+	//mov $0x40,%ax					//AX=0x40
 	//在无特权级变化的情况下，即使不加载TSS Descriptor的选择子到TR寄存器，异常仍可被捕获并处理
 	//但如果缺少TSS Descriptor支持，异常可能会使Bochs显示LTR: doesn't point to an availiable TSS descriptor!日志信息，甚至使虚拟机崩溃
-	ltr %ax				//LTR指令将TSS Descriptor选择子加载到TR寄存器
+	//ltr %ax				//LTR指令将TSS Descriptor选择子加载到TR寄存器
 	movq go_to_kernel(%rip),%rax	//RAX=基地址RIP+偏移地址go_to_kernel
 	pushq $0x08			//内核代码段选择子
 	pushq %rax			//段内地址偏移

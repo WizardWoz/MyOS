@@ -80,7 +80,7 @@ extern unsigned int TSS64_Table[26];   // 任务状态段TSS64结构，在内核
   // temp_var 在这里不可见
 */
 
-/*宏函数
+/*宏函数：设置中断门、调用门、任务门等
   函数参数：
   1.gate_selector_addr：门选择子地址
   2.attr：门描述符属性
@@ -94,7 +94,7 @@ extern unsigned int TSS64_Table[26];   // 任务状态段TSS64结构，在内核
   如果代码改为addl %4,%%ecx \n\t则可通过编译；原因可能是GNU C编译器无法为该指令匹配合适的寄存器
 
   movw	%%dx,%%ax		//AX=DX=addr
-  andq	$0x7,%%rcx		//RCX=RCX & 0x0000 0111
+  andq	$0x7,%%rcx		//RCX=RCX & 0x0000 0111，只保留RCX的低3位
   addq	%4,%%rcx		//RCX=RCX+addr<<8
   shlq	$32,%%rcx		//RCX向左移32位
   addq	%%rcx,%%rax		//RAX=RAX+RCX
@@ -107,29 +107,6 @@ extern unsigned int TSS64_Table[26];   // 任务状态段TSS64结构，在内核
   shrq	$32,%%rdx		//RDX向右移32位
   movq	%%rdx,%1		//*(1 + (unsigned long *)(gate_selector_addr))=RDX
 */
-// #define _set_gate(gate_selector_addr, attr, ist, code_addr)                                                 \
-// 	do                                                                                                      \
-// 	{                                                                                                       \
-// 		unsigned long __d0, __d1;                                                                           \
-// 		__asm__ __volatile__("movw	%%dx,	%%ax	\n\t"                                                         \
-// 							 "andq	$0x7,	%%rcx	\n\t"                                                        \
-// 							 "addq	%4,	%%rcx	\n\t"                                                          \
-// 							 "shlq	$32,	%%rcx	\n\t"                                                         \
-// 							 "addq	%%rcx,	%%rax	\n\t"                                                       \
-// 							 "xorq	%%rcx,	%%rcx	\n\t"                                                       \
-// 							 "movl	%%edx,	%%ecx	\n\t"                                                       \
-// 							 "shrq	$16,	%%rcx	\n\t"                                                         \
-// 							 "shlq	$48,	%%rcx	\n\t"                                                         \
-// 							 "addq	%%rcx,	%%rax	\n\t"                                                       \
-// 							 "movq	%%rax,	%0	\n\t"                                                          \
-// 							 "shrq	$32,	%%rdx	\n\t"                                                         \
-// 							 "movq	%%rdx,	%1	\n\t"                                                          \
-// 							 : "=m"(*((unsigned long *)(gate_selector_addr))),                              \
-// 							   "=m"(*(1 + (unsigned long *)(gate_selector_addr))), "=&a"(__d0), "=&d"(__d1) \
-// 							 : "i"(attr << 8),                                                              \
-// 							   "3"((unsigned long *)(code_addr)), "2"(0x8 << 16), "c"(ist)                  \
-// 							 : "memory");                                                                   \
-// 	} while (0)
 #define _set_gate(gate_selector_addr, attr, ist, code_addr)                                \
 	do                                                                                     \
 	{                                                                                      \
@@ -154,10 +131,15 @@ extern unsigned int TSS64_Table[26];   // 任务状态段TSS64结构，在内核
 			: "memory");                                                                   \
 	} while (0)
 
-/*
+/*宏函数：将TSS段描述符的段选择子加载到TR寄存器
+  参数：
+  1.n：
 
+  指令部分：ltr %%ax		//将AX的数据加载到TR寄存器
+  输出部分：无
+  输入部分：所有指令执行前，将n左移3位得到的数据存入AX
+  损坏描述：可能对内存空间有影响，用memory声明
 */
-
 #define load_TR(n)                         \
 	do                                     \
 	{                                      \
@@ -167,11 +149,11 @@ extern unsigned int TSS64_Table[26];   // 任务状态段TSS64结构，在内核
 							 : "memory");  \
 	} while (0)
 
-/*函数：设置中断门
+/*函数：设置外部中断门
   函数参数：
   1.unsigned int n：中断向量号
   2.unsigned char ist：
-  3.void *addr：
+  3.void *addr：entry.S文件中各异常处理函数的标号对应的ENTRY()入口线性地址
   函数返回值：void
 */
 inline void set_intr_gate(unsigned int n, unsigned char ist, void *addr)
@@ -183,7 +165,7 @@ inline void set_intr_gate(unsigned int n, unsigned char ist, void *addr)
   函数参数：
   1.unsigned int n：中断向量号
   2.unsigned char ist：
-  3.void *addr：
+  3.void *addr：entry.S文件中各异常处理函数的标号对应的ENTRY()入口线性地址
   函数返回值：void
 */
 inline void set_trap_gate(unsigned int n, unsigned char ist, void *addr)
@@ -195,7 +177,7 @@ inline void set_trap_gate(unsigned int n, unsigned char ist, void *addr)
   函数参数：
   1.unsigned int n：中断向量号
   2.unsigned char ist：
-  3.void *addr：
+  3.void *addr：entry.S文件中各异常处理函数的标号对应的ENTRY()入口线性地址
   函数返回值：void
 */
 inline void set_system_gate(unsigned int n, unsigned char ist, void *addr)
@@ -203,22 +185,36 @@ inline void set_system_gate(unsigned int n, unsigned char ist, void *addr)
 	_set_gate(IDT_Table + n, 0xEF, ist, addr); // P,DPL=3,TYPE=F
 }
 
-/*
-
+/*函数：设置内部中断门
+  函数参数：
+  1.unsigned int n：中断向量号
+  2.unsigned char ist：
+  3.void *addr：entry.S文件中各异常处理函数的标号对应的ENTRY()入口线性地址
+  函数返回值：void
 */
-
 inline void set_system_intr_gate(unsigned int n, unsigned char ist, void *addr) // int3
 {
 	_set_gate(IDT_Table + n, 0xEE, ist, addr); // P,DPL=3,TYPE=E
 }
 
-/*
-
+/*函数：负责配置TSS段内的各个RSP和IST项
+  参数：
+  1.unsigned long rsp0：
+  2.unsigned long rsp1：
+  3.unsigned long rsp2：
+  4.unsigned long ist1：
+  5.unsigned long ist2：
+  6.unsigned long ist3：
+  7.unsigned long ist4：
+  8.unsigned long ist5：
+  9.unsigned long ist6：
+  10.unsigned long ist7：
+  返回值：void
 */
-
 void set_tss64(unsigned long rsp0, unsigned long rsp1, unsigned long rsp2, unsigned long ist1, unsigned long ist2, unsigned long ist3,
 			   unsigned long ist4, unsigned long ist5, unsigned long ist6, unsigned long ist7)
 {
+	//因为TSS64_Table是unsigned int类型，所以unsigned long类型的rsp、ist占用2个位置
 	*(unsigned long *)(TSS64_Table + 1) = rsp0;
 	*(unsigned long *)(TSS64_Table + 3) = rsp1;
 	*(unsigned long *)(TSS64_Table + 5) = rsp2;

@@ -21,9 +21,11 @@ void stack_segment_fault();
 void general_protection();
 void page_fault();
 void x87_FPU_error();
-void aligment_check();
+void alignment_check();
 void machine_check();
 void SIMD_exception();
 void virtualization_exception();
+
+void sys_vector_init();
 
 #endif

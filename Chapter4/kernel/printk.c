@@ -8,8 +8,8 @@
   函数必须至少有一个固定参数，这个固定参数通常用于指示可变参数的数量或类型
   2.包含<stdarg.h>头文件：访问可变参数所需的宏定义都在这个头文件中
   3.定义va_list类型的变量：在函数内部，需要定义一个va_list类型的变量，用于存储可变参数的信息
-  4.使用va_start初始化va_list：在访问可变参数之前，必须调用va_start宏来初始化va_list变量。它需要两个参数：
-  第一个是va_list变量本身，第二个是函数中的最后一个固定参数的名称；作用是让args指向可变参数列表的起始位置
+  4.使用va_start初始化va_list：必须在第一次调用va_arg或va_copy之前被调用。它需要两个参数：
+  第一个是va_list变量本身，第二个是函数中的最后一个固定参数的名称（不能声明为寄存器变量、函数或数组类型）；作用是让args指向可变参数列表的起始位置
   5.使用va_arg访问可变参数：每次调用va_arg宏都会获取可变参数列表中的下一个参数。它需要两个参数：
   第一个是va_list变量，第二个是当前要获取的参数的类型。使用va_arg时，你需要知道每个可变参数的类型
   va_arg会根据指定的类型从内存中读取相应字节的数据，并自动将va_list指向下一个参数。因此，调用va_arg的顺序和类型必须与实际传递的可变参数一致
@@ -204,10 +204,11 @@ static char *number(char *str, long num, int base, int size, int precision, int 
     return str; // 返回转换成功的字符串首地址
 }
 
-/*解析color_printk函数提供的格式化字符串及其参数
+/*函数：解析color_printk函数提供的格式化字符串及其参数
   函数参数：
   1.char * buf：存放格式化字符串的缓冲区首地址指针
   2.const char * fmt：存放格式化字符串的缓冲区首地址指针
+  3.va_list args：可变参数列表
   函数返回值：int，字符串长度
 */
 int vsprintf(char *buf, const char *fmt, va_list args)
@@ -226,7 +227,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
             *str++ = *fmt;
             continue;
         }
-        // 如果字符是'%'，后面可接'-'、'+'、' '、'#'、'0'等格式符，
+    // 如果字符是'%'，后面可接'-'、'+'、' '、'#'、'0'等格式符，
         flags = 0;
     // 如果后一个字符是上述格式符，则设置flags标志；若不是则跳出repeat
     repeat:
@@ -258,6 +259,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
         else if (*fmt == '*')
         {
             fmt++;
+            //field_width=可变参数列表中对应的int类型参数，同时可变参数列表指针指向下一个参数
             field_width = va_arg(args, int);
             if (field_width < 0)
             {

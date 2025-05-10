@@ -13,7 +13,7 @@
 #define PLUS 4     /*数值部分为正数的标志*/
 #define SPACE 8    /*如果是正数则为' '*/
 #define LEFT 16    /*数据区左对齐标志*/
-#define SPECIAL 32 /*十六进制数值部分前使用'0x'或'0X'*/
+#define SPECIAL 32 /*十六进制数值部分前使用'0x'或'0X'；八进制数值部分前使用'0'*/
 #define SMALL 64   /*英文字母使用小写*/
 
 /*宏函数：判断当前字符是否是0~9以内的数字
