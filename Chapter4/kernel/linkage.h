@@ -1,5 +1,5 @@
-#ifndef _LINKAGE_H_
-#define _LINKAGE_H_
+#ifndef __LINKAGE_H__
+#define __LINKAGE_H__
 
 #define L1_CACHE_BYTES 32
 //Linux 2.4.0内核的traps.c文件使用asmlinkage宏声明各异常处理模块的入口标识符（如：nmi、page_fault等）

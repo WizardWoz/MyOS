@@ -330,34 +330,42 @@ void do_page_fault(unsigned long rsp, unsigned long error_code)
     __asm__ __volatile__("movq %%cr2,%0" : "=r"(cr2)::"memory"); // C语言不支持寄存器操作，只能使用内嵌汇编语句
     p = (unsigned long *)(rsp + 0x98);
     color_printk(RED, BLACK, "do_page_fault(14),ERROR_CODE:%#018lx,RSP:%#018lx,RIP:%#018lx\n", error_code, rsp, *p);
+    //如果错误码error_code第0位不是1，即为页不存在引发异常
     if (!(error_code & 0x01))
     {
         color_printk(RED, BLACK, "Page Not-Present,\t");
     }
+    //如果错误码error_code第1位为1，即为写入页引发异常
     if (error_code & 0x02)
     {
         color_printk(RED, BLACK, "Write Cause Fault,\t");
     }
+    //如果错误码error_code第1位为0，即为读取页引发异常
     else
     {
         color_printk(RED, BLACK, "Read Cause Fault,\t");
     }
+	//如果错误码error_code第2位为1，即为使用普通用户权限访问页引发异常
     if (error_code & 0x04)
     {
         color_printk(RED, BLACK, "Fault in user(3)\t");
     }
+	//如果错误码error_code第2位为0，即为使用超级用户权限访问页引发异常
     else
     {
         color_printk(RED, BLACK, "Fault in supervisor(0,1,2)\t");
     }
+	//如果错误码error_code第3位为1，即为置位页表项的保留位引发异常
     if (error_code & 0x08)
     {
         color_printk(RED, BLACK, ",Reversed Bit Cause Fault\t");
     }
+	//如果错误码error_code第4位为1，即为获取指令时引发异常
     if (error_code & 0x10)
     {
         color_printk(RED, BLACK, ",Instruction Fetch Cause Fault");
     }
+	//打印出CR2控制寄存器的
     color_printk(RED, BLACK, "\n");
     color_printk(RED, BLACK, "CR2:%#018lx\n", cr2);
     while (1)
