@@ -4,11 +4,7 @@
 # 1 "/usr/include/stdc-predef.h" 1 3 4
 # 1 "<命令行>" 2
 # 1 "head.S"
-
-
-
-
-
+# 20 "head.S"
 .section .text
 .globl _start
 _start:
@@ -51,7 +47,7 @@ entry64:
  movq $0xFFFF800000007E00,%rsp
 
 setup_IDT:
-# 60 "head.S"
+# 74 "head.S"
  leaq ignore_int(%rip),%rdx
  movq $(0x08<<16),%rax
  movw %dx,%ax
@@ -193,6 +189,7 @@ __PDPTE:
 .org 0x3000
 __PDE:
 
+
  .quad 0x000083
 
  .quad 0x200083
@@ -202,9 +199,11 @@ __PDE:
  .quad 0x600083
 
  .quad 0x800083
+
  .quad 0xe0000083
  .quad 0xe0200083
  .quad 0xe0400083
+
  .quad 0xe0600083
  .quad 0xe0800083
  .quad 0xe0a00083
