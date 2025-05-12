@@ -8,6 +8,12 @@
 #include "trap.h"
 #include "memory.h"
 
+/*全局内存管理结构体变量memory_management_struct初始化
+  struct e820[32]={0,0,0......,0};
+  unsigned long e820_length=0;
+*/
+struct Global_Memory_Descriptor memory_management_struct={{0},0};
+
 void Start_Kernel(void)
 {
     //帧缓存的格式：即一个像素点能显示的颜色值位宽；loader.bin设置显示模式可支持32位颜色深度的像素点
