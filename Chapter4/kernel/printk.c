@@ -227,7 +227,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
             *str++ = *fmt;
             continue;
         }
-    // 如果字符是'%'，后面可接'-'、'+'、' '、'#'、'0'等格式符，
+        // 如果字符是'%'，后面可接'-'、'+'、' '、'#'、'0'等格式符，
         flags = 0;
     // 如果后一个字符是上述格式符，则设置flags标志；若不是则跳出repeat
     repeat:
@@ -259,7 +259,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
         else if (*fmt == '*')
         {
             fmt++;
-            //field_width=可变参数列表中对应的int类型参数，同时可变参数列表指针指向下一个参数
+            // field_width=可变参数列表中对应的int类型参数，同时可变参数列表指针指向下一个参数
             field_width = va_arg(args, int);
             if (field_width < 0)
             {
@@ -434,9 +434,9 @@ int vsprintf(char *buf, const char *fmt, va_list args)
 */
 int color_printk(unsigned int FRcolor, unsigned int BKcolor, const char *fmt, ...)
 {
-    int i = 0;          //格式化字符串总长度
-    int count = 0;      //当前未打印的字符数
-    int line = 0;       //\t的制表符位置对应的空格符
+    int i = 0;     // 格式化字符串总长度
+    int count = 0; // 当前未打印的字符数
+    int line = 0;  //\t的制表符位置对应的空格符
     // 定义va_list类型的变量：在函数内部，需要定义一个va_list类型的变量，用于存储可变参数的信息
     va_list args;
     // 使用va_start初始化va_list：在访问可变参数之前，必须调用va_start宏来初始化va_list变量。它需要两个参数：
@@ -492,7 +492,7 @@ int color_printk(unsigned int FRcolor, unsigned int BKcolor, const char *fmt, ..
             // 假设Pos.XPosition=0，则需要绘制(0+8)&0x1000-0=8个空格；假设Pos.XPosition=1，则需要绘制(1+8)&0x1000-1=7个空格；......假设Pos.XPosition=7，则需要绘制(7+8)&0x1000-7=1个空格
             // 以此类推，Pos.XPosition=8，则需要绘制(8+8)&0x1000-8=8个空格，再次进入绘制1~8个空格的循环
             line = ((Pos.XPosition + 8) & ~(8 - 1)) - Pos.XPosition;
-Label_tab:
+        Label_tab:
             line--; // 需要填充的空格符数量-1
             putchar(Pos.FB_addr, Pos.XResolution, Pos.XPosition * Pos.XCharSize, Pos.YPosition * Pos.YCharSize,
                     FRcolor, BKcolor, ' ');

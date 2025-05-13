@@ -1,3 +1,18 @@
+/*初级内存管理单元对应的头文件
+  一、下边界对齐（Lower Boundary Alignment / Start Alignment）：关注点是数据开始位置
+  1.定义：指一个内存块的起始地址是某个特定对齐值（N）的整数倍
+  2.目的：这是最常见的内存对齐形式。确保数据结构的起始地址对齐，可以提高CPU访问内存的效率。很多CPU架构在访问未对齐的数据时可能会产生性能惩罚，
+  甚至直接抛出硬件异常。例如，一个4字节的整数，如果其起始地址是4的倍数，CPU通常可以一次性读取；如果不是，则可能需要多次内存访问
+  3.如何实现：当分配内存时，如果原始的起始地址不满足对齐要求，分配器会在数据实际开始前 填充一些字节 (padding)，使得数据的起始地址落在对齐的边界上。
+  例如，如果要求4字节对齐，而当前可分配的地址是0x1001，那么分配器会跳过0x1001,0x1002,0x1003（填充3字节），从0x1004开始分配内存给请求的数据
+  二、上边界对齐（Upper Boundary Alignment / End Alignment）：关注点是数据结束位置
+  1.定义：指一个内存块的 结束地址的下一个地址（即内存块所占用的总大小加上起始地址后得到的地址）是某个特定对齐值（N）的整数倍。
+  换句话说，如果内存块大小为S，起始地址为A，那么A+S需要是N的整数倍。
+  2.目的：确保该内存块之后紧邻分配的下一个内存块能够自然地满足下边界对齐的要求（如果下一个块的对齐要求与当前块的上边界对齐值相同）。
+  在某些特定的内存管理或数据结构布局中，可能需要确保整个内存区域的总大小（包括可能的数据和末尾的填充）是某个值的倍数。
+  例如，一个内存池的每个单元，或者一个固定大小记录的集合。
+  3.
+*/
 #ifndef __MEMORY_H__
 #define __MEMORY_H__
 
@@ -64,11 +79,11 @@ struct E820
 */
 struct Page
 {
-	struct Zone *zone_struct;		//指向本页所属的区域结构体
-	unsigned long PHY_address;		//页的物理地址
-	unsigned long attribute;		//页的属性：当前页映射状态、活动状态、使用者等信息
-	unsigned long reference_count;	//该页的引用次数
-	unsigned long age;				//该页的创建时间
+	struct Zone *zone_struct;	   // 指向本页所属的区域结构体
+	unsigned long PHY_address;	   // 页的物理地址
+	unsigned long attribute;	   // 页的属性：当前页映射状态、活动状态、使用者等信息
+	unsigned long reference_count; // 该页的引用次数
+	unsigned long age;			   // 该页的创建时间
 };
 
 /*结构体：Zone区域空间结构
@@ -78,27 +93,41 @@ struct Page
 */
 struct Zone
 {
-	struct Page *pages_group;			//struct Page结构体数组指针
-	unsigned long pages_length;			//本区域（本段）包含的struct Page结构体数量
-	unsigned long zone_start_address;	//本区域（本段）的起始页对齐地址
-	unsigned long zone_end_address;		//本区域（本段）的结束页对齐地址
-	unsigned long zone_length;			//本区域（本段）经过页对齐后的地址长度
-	unsigned long attribute;			//本区域（本段）的属性（当前区域是否支持DMA、页是否经过页表映射等信息）
-	struct Global_Memory_Descriptor *GMD_struct;	//struct Global_Memory_Descriptor全局结构体指针
-	unsigned long page_using_count;		//本区域（本段）已使用物理内存页数量
-	unsigned long page_free_count;		//本区域（本段）空闲物理内存页数量
-	unsigned long total_pages_link;		//本区域（本段）物理页被引用次数
+	struct Page *pages_group;					 // struct Page结构体数组指针
+	unsigned long pages_length;					 // 本区域（本段）包含的struct Page结构体数量
+	unsigned long zone_start_address;			 // 本区域（本段）的起始页对齐地址
+	unsigned long zone_end_address;				 // 本区域（本段）的结束页对齐地址
+	unsigned long zone_length;					 // 本区域（本段）经过页对齐后的地址长度
+	unsigned long attribute;					 // 本区域（本段）的属性（当前区域是否支持DMA、页是否经过页表映射等信息）
+	struct Global_Memory_Descriptor *GMD_struct; // struct Global_Memory_Descriptor全局结构体指针
+	unsigned long page_using_count;				 // 本区域（本段）已使用物理内存页数量
+	unsigned long page_free_count;				 // 本区域（本段）空闲物理内存页数量
+	unsigned long total_pages_link;				 // 本区域（本段）物理页被引用次数
 };
 
 /*结构体：Global_Memory_Descriptor保存全局内存信息以供内存管理模块使用
  */
 struct Global_Memory_Descriptor
 {
-	struct E820 e820[32];	   	// 物理内存段结构数组，每个物理内存段信息结构体占用一个数组单元
-	unsigned long e820_length; 	// 物理内存段结构数组长度，记录当前获得的物理段数量
-	unsigned long *bits_map;	//物理地址空间页映射位图
-	unsigned long bits_size;	//物理地址空间页数量
-	unsigned long bits_length;
+	struct E820 e820[32];	   // 物理内存段结构数组，每个物理内存段信息结构体占用一个数组单元
+	unsigned long e820_length; // 物理内存段结构数组长度，记录当前获得的物理段数量
+	// bits_****相关字段：建立bits位图映射的目的是方便检索pages_struct中的空闲页表
+	unsigned long *bits_map;   // 物理地址空间页映射位图
+	unsigned long bits_size;   // 物理地址空间页数量
+	unsigned long bits_length; // 物理地址空间页映射位图长度
+	// pages_****、zones_****：记录struct Page、struct Zone结构体数组的首地址以及资源分配情况等信息
+	struct Page *pages_struct;	// 全局struct Page结构体的指针
+	unsigned long pages_size;	// struct Page结构体总数
+	unsigned long pages_length; // struct Page结构体数组长度
+	struct Zone *zones_struct;	// 全局struct Zone结构体的指针
+	unsigned long zones_size;	// struct Zone结构体总数
+	unsigned long zones_length; // struct Zone结构体数组长度
+	// start_****、end_****：保存内核程序编译后各段首尾地址（代码段、数据段、BSS段等），首尾地址在kernel.lds文件定义
+	unsigned long start_code;	 // 内核程序起始代码段地址
+	unsigned long end_code;		 // 内核程序结束代码段地址
+	unsigned long end_data;		 // 内核程序结束数据段地址
+	unsigned long end_brk;		 // 内核程序结束地址
+	unsigned long end_of_struct; // 内存页管理结构的结尾地址
 };
 extern struct Global_Memory_Descriptor memory_management_struct; // 在main.c中定义
 
