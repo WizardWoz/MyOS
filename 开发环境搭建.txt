@@ -139,3 +139,144 @@ bochs -f ./.bochsrc
 9.调试boot.bin和loader.bin，一般是通过在代码中插入死循环语句jmp $
 10.调试system内核，用objdump -D system得到各个函数的入口地址；例如Start_Kernel：0x000000104771；color_printk：0x000000105AEC
    在调用函数的call指令处打断点，在函数出口的ret指令处打断点，之后执行<bochs: > c命令，在此期间通过各种命令查看寄存器和内存
+九、Git和GitHub的一些使用技巧
+1.安装git通常使用yum install命令或者直接下载rpm包
+2.首次配置Git
+# 配置全局用户名 (替换 "Your Name" 为你的名字)
+git config --global user.name "Your Name"
+# 配置全局邮箱地址 (替换 "your_email@example.com" 为你的邮箱)
+git config --global user.email "your_email@example.com"
+# （可选）检查配置信息
+git config --list
+3.基本Git操作
+(1)初始化仓库
+# 进入你的项目目录
+cd /path/to/your/project
+# 初始化 Git 仓库 (会在目录下创建一个隐藏的 .git 文件夹)
+git init
+(2)添加文件
+# 添加指定文件
+git add filename.txt
+git add another_file.py
+# 添加当前目录下所有更改（新增、修改、删除）的文件
+git add .
+(3)提交更改
+# 提交并添加描述信息
+git commit -m "你的提交信息，例如：添加了用户登录功能"
+(4)查看状态和历史
+# 查看工作区和暂存区的状态（哪些文件被修改、暂存等）
+git status
+# 查看提交历史
+git log
+# 查看简洁的提交历史（一行显示）
+git log --oneline
+# 查看带分支图形的提交历史
+git log --graph --oneline --all
+4.分支管理
+(1)创建和切换分支
+# 查看所有本地分支（当前分支前有 * 号）
+git branch
+# 创建一个新分支（例如叫 feature-x）
+git branch feature-x
+# 切换到新创建的分支
+git checkout feature-x
+# 创建并立即切换到新分支（常用）
+git checkout -b bugfix-y
+(2)合并分支
+# 1. 首先切换回你想要合并入的目标分支（例如 main）
+git checkout main
+# 2. 确保目标分支是最新的（如果是远程协作，先 git pull）
+# git pull origin main  (后面会讲到远程操作)
+# 3. 合并 feature-x 分支到当前分支 (main)
+git merge feature-x
+(3)删除分支
+# 删除已合并的分支
+git branch -d feature-x
+# 强制删除未合并的分支（谨慎使用！）
+git branch -D feature-x
+5.连接到远程GitHub仓库
+(1)克隆现有仓库（克隆操作会自动将远程仓库设置为origin）
+# 1. 在 GitHub 项目页面找到仓库 URL（HTTPS 或 SSH 格式）
+#    HTTPS: https://github.com/username/repository-name.git
+#    SSH:   git@github.com:username/repository-name.git (推荐使用 SSH，见第 6 节)
+# 2. 使用 git clone 命令
+#    使用 HTTPS URL:
+git clone https://github.com/username/repository-name.git
+#    或者使用 SSH URL (需要先配置 SSH 密钥):
+#    git clone git@github.com:username/repository-name.git
+# 3. 这会在当前目录下创建一个与仓库同名的文件夹，并包含所有项目文件和历史
+cd repository-name
+(2)将本地仓库关联到GitHub仓库
+# 1. 在 GitHub 上创建一个新的空仓库（不要勾选初始化 README、.gitignore 或 License）。
+#    创建后，GitHub 会显示仓库的 URL。
+# 2. 进入你的本地项目目录
+cd /path/to/your/project
+# 3. 添加远程仓库地址，并命名为 origin (这是标准惯例)
+#    使用 HTTPS URL:
+git remote add origin https://github.com/username/repository-name.git
+#    或者使用 SSH URL:
+#    git remote add origin git@github.com:username/repository-name.git
+# 4. （可选）验证远程仓库是否添加成功
+git remote -v
+(3)推送更改到Github
+# 首次推送本地分支（例如 main）到 origin，并设置上游跟踪 (-u)
+git push -u origin main
+# 之后，如果本地 main 分支有新的提交，可以直接推送
+git push
+# 如果要推送其他分支，例如 develop
+git push origin develop
+(4)拉取GitHub上的更改
+# 拉取当前分支对应的远程分支（例如 main）的更新
+git pull origin main
+# 如果上游已设置，通常可以直接用
+git pull
+# git pull 实际上是 git fetch（获取远程更新但不合并）和 git merge（合并）的组合
+6.使用SSH密钥连接GitHub（推荐）
+(1)查看是否存在id_rsa.pub,id_ed25519.pub或id_ecdsa.pub等文件。如果存在，可以跳过生成步骤（除非你想用新的）
+ls -al ~/.ssh
+(2)生成新的ssh密钥
+# 替换为你的 GitHub 邮箱
+ssh-keygen -t ed25519 -C "your_email@example.com"
+# 或者使用 RSA (如果系统不支持 Ed25519)
+# ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+(3)将ssh公钥添加到GitHub
+# 显示并复制公钥内容 (注意是 .pub 文件)
+cat ~/.ssh/id_ed25519.pub
+# 复制输出的全部内容（以 ssh-ed25519 或 ssh-rsa 开头，以你的邮箱结尾）。
+登录 GitHub -> 点击右上角头像 -> Settings -> 左侧菜单 SSH and GPG keys -> 点击 "New SSH key" 或 "Add SSH key" -> 粘贴你的公钥，
+给它起个标题（例如 "My CentOS 7 VM"），然后点击 "Add SSH key"。
+(4)测试ssh连接
+ssh -T git@github.com；首次连接会询问是否信任 GitHub 的主机密钥，输入 yes。如果看到 "Hi username! You've successfully authenticated..." 的消息，说明配置成功
+(5)使用ssh url进行Git操作
+# 查看当前的 remote
+git remote -v
+# 移除旧的 origin (如果是 HTTPS)
+# git remote remove origin
+# 添加新的 SSH origin
+# git remote add origin git@github.com:username/repository-name.git
+# 或者直接修改现有 origin 的 URL
+git remote set-url origin git@github.com:username/repository-name.git
+7..gitignore 文件：在项目根目录下创建一个名为 .gitignore 的文件，列出你不希望 Git 跟踪的文件或目录模式（例如编译产生的文件、日志文件、依赖库文件夹 node_modules 等）
+例如：# 忽略日志文件
+*.log
+logs/
+
+# 忽略编译产生的文件
+*.o
+*.class
+build/
+
+# 忽略特定配置文件（可能包含敏感信息）
+config.local.yaml
+
+# 忽略操作系统生成的文件
+.DS_Store
+Thumbs.db
+
+# 忽略依赖管理文件夹
+node_modules/
+vendor/
+8.忽略已经被Git追踪的文件：.gitignore文件只对尚未被Git追踪的文件生效。如果一个文件已经被Git追踪（即你之前已经git add并git commit了它），
+即使把它添加到.gitignore中，Git仍然会继续追踪它。要停止追踪一个已经被追踪的文件并将其忽略，你需要先从Git索引中移除它，然后再提交：
+git rm --cached <文件名>
+git commit -m "Stop tracking <文件名>"
