@@ -79,7 +79,7 @@ struct E820
 */
 struct Page
 {
-	struct Zone *zone_struct;	   // 指向本页所属的区域结构体
+	struct Zone *zone_struct;	   // 指向本页所属的可用物理区域结构体
 	unsigned long PHY_address;	   // 页的物理地址
 	unsigned long attribute;	   // 页的属性：当前页映射状态、活动状态、使用者等信息
 	unsigned long reference_count; // 该页的引用次数
@@ -87,8 +87,8 @@ struct Page
 };
 
 /*结构体：Zone区域空间结构
-  区域空间结构体struct Zone代表各个可用物理内存区域（可用物理内存段），并记录和管理本区域物理内存页的分配情况
-  由于物理页在页表的映射中可以是一对多的关系，一个物理页可以同时映射到线性地址空间的多个位置，
+  区域空间结构体struct Zone代表各个可用物理内存区域（可用物理内存段，包括多个可用物理内存页），
+  并记录和管理本区域物理内存页的分配情况由于物理页在页表的映射中可以是一对多的关系，一个物理页可以同时映射到线性地址空间的多个位置，
   所以成员变量total_pages_link与page_using_count在数值上不一定相等
 */
 struct Zone

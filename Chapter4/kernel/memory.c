@@ -121,7 +121,7 @@ void init_memory()
         {
             continue;
         }
-
+        //新的struct Zone结构体初始化
         z=memory_management_struct.zones_struct+memory_management_struct.zones_size;
         memory_management_struct.zones_size++;
         z->zone_start_address=start;
@@ -134,7 +134,7 @@ void init_memory()
         z->GMD_struct=&memory_management_struct;
         z->pages_length=(end-start)>>PAGE_2M_SHIFT;
         z->pages_group=(struct Page *)(memory_management_struct.pages_struct+(start>>PAGE_2M_SHIFT));
-
+        //从该可用物理内存段的首个可用物理内存页开始，初始化该可用物理内存段（区域）内包含的每个可用物理内存页
         p=z->pages_group;
         for ( j = 0; j < z->pages_length; j++,p++)
         {
@@ -143,8 +143,11 @@ void init_memory()
             p->attribute=0;
             p->reference_count=0;
             p->age=0;
+            //把当前struct Page结构体代表的物理地址转换成bits_map映射位图中对应的位；由于此前已将bits_map全部置位
+            //此刻再将可用物理页对应的位与1进行异或操作，将对应的可用物理页标记为未使用
             *(memory_management_struct.bits_map+((p->PHY_address>>PAGE_2M_SHIFT)>>6))^=1UL<<
             (p->PHY_address>>PAGE_2M_SHIFT)%64;
         }
     }
+    
 }
