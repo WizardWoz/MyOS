@@ -29,6 +29,25 @@
 #define PAGE_4K_SIZE (1UL << PAGE_4K_SHIFT)				// 代表4KB物理页的容量
 #define PAGE_2M_MASK (~(PAGE_2M_SIZE - 1))				// 代表2MB数值的掩码，用于屏蔽低于2MB的数值
 #define PAGE_4K_MASK (~(PAGE_4K_SIZE - 1))				// 代表4KB数值的掩码，用于屏蔽低于4KB的数值
+
+//alloc_pages函数选择struct Zone内存段
+#define ZONE_DMA (1<<0)			//ZONE_DMA=1
+#define ZONE_NORMAL (1<<1)
+#define ZONE_UNMAPPED (1<<2)
+
+//struct Page的属性（alloc_pages函数的flag标记位参数）
+#define PG_PTable_Mapped (1<<0)
+#define PG_Kernel_Init (1<<1)
+#define PG_Referenced (1<<2)
+#define PG_Dirty (1<<3)
+#define PG_Active (1<<4)
+#define PG_Up_To_Date (1<<5)
+#define PG_Device (1<<6)
+#define PG_Kernel (1<<7)
+#define PG_K_Share_To_U (1<<8)
+#define PG_Slab (1<<9)
+
+
 /*宏函数：将参数addr地址按2MB页的上边界对齐
   参数：
   1.addr：64位虚拟线性地址
@@ -50,6 +69,11 @@
  1.addr：真实物理地址（<=64bit）
 */
 #define Phy_To_Virt(addr) ((unsigned long *)((unsigned long)(addr) + PAGE_OFFSET))
+
+//每种不同的可用物理内存区域的下标
+int ZONE_DMA_INDEX=0;		//memory.h中定义
+int ZONE_NORMAL_INDEX=0;	//低1GBRAM，已经被映射到页表中
+int ZONE_UNMAPPED_INDEX=0;	//高1GBRAM，还未被映射到页表中
 
 /*结构体：Memory_E820_Formate，用于数据解析；因为使用的物理地址空间信息已经在Loader引导加载程序中通过BIOS中断服务程序
   int 15h，AX=E820H获得，并保存在物理地址0x7E00处，本结构体就是存储从0x7E00提取的信息，每条物理地址空间信息占20B
@@ -130,6 +154,8 @@ struct Global_Memory_Descriptor
 	unsigned long end_of_struct; // 内存页管理结构的结尾地址
 };
 extern struct Global_Memory_Descriptor memory_management_struct; // 在main.c中定义
+
+unsigned long page_init(struct Page *page,unsigned long flags);
 
 void init_memory();
 

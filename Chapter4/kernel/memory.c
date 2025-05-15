@@ -1,6 +1,41 @@
 #include "memory.h"
 #include "lib.h"
 
+/*函数：初始化一个崭新页面对应的struct Page结构体
+  参数：
+  1.struct Page *page：需要初始化的新页面对应的结构体指针
+  2.unsigned long flags：指示当前新页面属性的一些宏定义
+  返回值：unsigned long，目前暂时为0
+*/
+unsigned long page_init(struct Page *page, unsigned long flags)
+{
+    if (!page->attribute)   //新页面的属性不是0
+    {
+        //先置位bits_map页映射位图的相应位（(page->PHY_address>>PAGE_2M_SHIFT)>>6)和(page->PHY_address>>PAGE_2M_SHIFT)%64意义相同
+        *(memory_management_struct.bits_map+((page->PHY_address>>PAGE_2M_SHIFT)>>6))|=1UL<<(page->PHY_address>>PAGE_2M_SHIFT)%64;
+        page->attribute=flags;      //struct Page结构体的属性是传入的宏定义参数
+        page->reference_count++;    //该页的引用次数+1
+        page->zone_struct->page_using_count++;  //该页所属的可用内存区域的已使用物理内存页数量+1
+        page->zone_struct->page_free_count--;   //该页所属的可用内存区域的空闲物理内存页数量-1
+        page->zone_struct->total_pages_link++;  //该页所属的可用内存区域的物理页被引用次数+1
+    }
+    //如果新页面属性（或者宏定义参数flags）只有PG_Referenced引用属性或者PG_K_Share_To_U共享属性
+    else if ((page->attribute&PG_Referenced)||(page->attribute&PG_K_Share_To_U)||(flags&PG_Referenced)||(flags&PG_K_Share_To_U))
+    {
+        page->attribute|=flags;     //struct Page结构体的属性是传入的宏定义参数
+        page->reference_count++;    //该页的引用次数+1
+        page->zone_struct->total_pages_link++;  //该页所属的可用内存区域的物理页被引用次数+1
+    }
+    else
+    {
+        //否则只是置位bit映射位图的相应位
+        *(memory_management_struct.bits_map+((page->PHY_address>>PAGE_2M_SHIFT)>>6))|=1UL<<(page->PHY_address>>PAGE_2M_SHIFT)%64;
+        //并添加页表属性
+        page->attribute|=flags;
+    }
+    return 0;
+}
+
 void init_memory()
 {
     int i, j;
@@ -46,6 +81,7 @@ void init_memory()
         }
     }
     color_printk(ORANGE, BLACK, "OS Can Used Total RAM:%#018lx\n", TotalMem);
+
     TotalMem = 0; // TotalMem置为0，用于统计2MB可用物理内存页数
     for (i = 0; i <= memory_management_struct.e820_length; i++)
     {
@@ -66,11 +102,12 @@ void init_memory()
         TotalMem += (end - start) >> PAGE_2M_SHIFT;
     }
     color_printk(ORANGE, BLACK, "OS Can Used Total 2M PAGES:%#010x=%010d\n", TotalMem, TotalMem);
+
     //计算出物理地址空间的的结束地址（目前的结束地址位于最后一条物理内存段信息中，但不排除其他可能性）
     TotalMem=memory_management_struct.e820[memory_management_struct.e820_length].address+
     memory_management_struct.e820[memory_management_struct.e820_length].length;
-    //物理地址空间页映射位图指针，指向内核程序结束地址end_brk的4KB上边界对齐位置处，
-    //此操作是为了保留一小段隔离空间，以防止误操作损坏其它空间的数据
+    //物理地址空间页映射位图指针，指向内核程序结束地址end_brk的4KB上边界对齐位置处，没有使用PAGE_4K_ALIGN宏函数
+    //+PAGE_4K_SIZE-1此操作是为了保留一小段隔离空间，以防止误操作损坏其它空间的数据
     memory_management_struct.bits_map=(unsigned long *)((memory_management_struct.end_brk+PAGE_4K_SIZE-1)&PAGE_4K_MASK);
     //把物理地址空间的结束地址按2MB对齐，从而统计出物理地址空间可分页数（包括可用物理内存RAM、内存空洞、ROM地址空间）
     memory_management_struct.bits_size=TotalMem>>PAGE_2M_SHIFT;
@@ -84,9 +121,8 @@ void init_memory()
     //将整个bits_map映射位图空间全部置为0xFF，以标注非内存页（内存空洞、ROM空间）以被使用，随后再将可用物理内存页（RAM空间）复位
     memset(memory_management_struct.bits_map,0xFF,memory_management_struct.bits_length);
 
-    //struct Page结构体数组存储空间位于bit映射位图之后，元素数量为物理地址空间可分页数，分配与计算方式与bit映射位图相似
-    memory_management_struct.pages_struct=(struct Page *)(((unsigned long)memory_management_struct.bits_map+memory_management_struct.bits_length
-    +PAGE_4K_SIZE-1)&PAGE_4K_MASK);
+    //struct Page结构体数组存储空间位于bit映射位图之后，元素数量为物理地址空间可分页数，分配与计算方式与bit映射位图相似，使用PAGE_4K_ALIGN宏函数
+    memory_management_struct.pages_struct=(struct Page *)PAGE_4K_ALIGN(memory_management_struct.bits_map+memory_management_struct.bits_length);
     //把物理地址空间的结束地址按2MB对齐，从而统计出物理地址空间可分页数（包括可用物理内存RAM、内存空洞、ROM地址空间）
     memory_management_struct.pages_size=TotalMem>>PAGE_2M_SHIFT;
     //struct Page结构体数组长度=(2MB物理页数量*sizeof(struct Page)+sizeof(long)-1)&(~(sizeof(long)-1))
@@ -94,6 +130,7 @@ void init_memory()
     //将struct Page结构体数组全部清零以备后续初始化程序使用
     memset(memory_management_struct.pages_struct,0x00,memory_management_struct.pages_length);
 
+    //struct Zone结构体数组的存储空间位于pages结构体
     memory_management_struct.zones_struct=(struct Zone *)(((unsigned long)memory_management_struct.pages_struct+
     memory_management_struct.pages_length+PAGE_4K_SIZE-1)&PAGE_4K_MASK);
     //目前暂时无法计算出struct Zone结构体数组元素个数，只能将zones_size成员赋值为0
@@ -103,7 +140,8 @@ void init_memory()
     //将struct Zone结构体数组全部清零以备后续初始化程序使用
     memset(memory_management_struct.zones_struct,0x00,memory_management_struct.zones_length);
 
-    for ( i = 0; i < memory_management_struct.e820_length; i++)
+    //再次遍历E820数组完成各数组成员变量（struct Zone、struct Page、0~2MB特殊可用物理内存页等）的初始化
+    for ( i = 0; i <= memory_management_struct.e820_length; i++)
     {
         unsigned long start,end;
         struct Zone *z;
@@ -148,6 +186,49 @@ void init_memory()
             *(memory_management_struct.bits_map+((p->PHY_address>>PAGE_2M_SHIFT)>>6))^=1UL<<
             (p->PHY_address>>PAGE_2M_SHIFT)%64;
         }
+    }
+    //因为0~2MB的物理内存页包含多个物理内存段，还囊括内核程序，所以必须对该页进行特殊初始化
+    memory_management_struct.pages_struct->zone_struct=memory_management_struct.zones_struct;
+    memory_management_struct.pages_struct->PHY_address=0UL;
+    memory_management_struct.pages_struct->attribute=0;
+    memory_management_struct.pages_struct->reference_count=0;
+    memory_management_struct.pages_struct->age=0;
+    memory_management_struct.zones_length=(memory_management_struct.zones_size*sizeof(struct Zone)+
+    sizeof(long)-1)&(~(sizeof(long)-1));
+    //各数组成员变量初始化结束后，接下来将其中的某些关键信息打印在屏幕上
+    color_printk(ORANGE,BLACK,"bits_map:%#018lx,bits_size:%#018lx,bits_length:%#018lx\n",memory_management_struct.bits_map
+    ,memory_management_struct.bits_size,memory_management_struct.bits_length);
+    color_printk(ORANGE,BLACK,"pages_struct:%#018lx,pages_size:%#018lx,pages_length:%#018lx\n",memory_management_struct.pages_struct,
+    memory_management_struct.pages_size,memory_management_struct.pages_length);
+    color_printk(ORANGE,BLACK,"zones_struct:%#018lx,zones_size:%#018lx,zones_length:%#018lx\n",memory_management_struct.zones_struct,
+    memory_management_struct.zones_size,memory_management_struct.zones_length);
+
+    //全局变量ZONE_DMA_INDEX和ZONE_NORMAL_INDEX暂且无法区分，故先将它们指向同一个struct Zone区域空间
+    ZONE_DMA_INDEX=0;
+    ZONE_NORMAL_INDEX=0;
+    //遍历显示各区域空间结构体struct Zone详细统计信息
+    for ( i = 0; i < memory_management_struct.zones_size; i++)
+    {
+        struct Zone *z=memory_management_struct.zones_struct+i;
+        color_printk(ORANGE,BLACK,"zone_start_address:%#018lx,zone_end_address:%#018lx,zone_length:%#018lx,pages_group:%#018lx,pages_length:%#018lx\n",
+        z->zone_start_address,z->zone_end_address,z->zone_length,z->pages_group,z->pages_length);
+        //如果当前区域的起始地址是0x100000000，就将此区域索引值记录在全局变量ZONE_UNMAPPED_INDEX中，表示从该区域空间开始的物理内存页未经过页表映射
+        if (z->zone_start_address==0x100000000)
+        {
+            ZONE_UNMAPPED_INDEX=i;
+        }
+    }
+    //最后调整成员变量end_of_struct的值，记录内存页管理结构的结尾地址，+sizeof(long)*32是预留了一段内存空间防止越界访问
+    memory_management_struct.end_of_struct=(unsigned long)((unsigned long)memory_management_struct.zones_struct+
+    memory_management_struct.zones_length+sizeof(long)*32)&&(~(sizeof(long)-1));
+
+    //内存管理单元初始化完毕后，必须初始化内存管理单元结构struct Global_Memory_Descriptor所占物理页的struct Page
+    color_printk(ORANGE,BLACK,"start_code:%#018lx,end_code:%#018lx,end_data:%#018lx,end_brk:%#018lx,end_of_struct:%#018lx\n",
+    memory_management_struct.start_code,memory_management_struct.end_code,memory_management_struct.end_data,memory_management_struct.end_brk,memory_management_struct.end_of_struct);
+    i=Virt_To_Phy(memory_management_struct.end_of_struct)>>PAGE_2M_SHIFT;
+    for ( j = 0; j <= i; j++)
+    {
+        
     }
     
 }
