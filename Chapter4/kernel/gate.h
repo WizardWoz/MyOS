@@ -23,7 +23,7 @@ extern struct desc_struct GDT_Table[]; // 全局描述符表GDT结构，在内�
 extern struct gate_struct IDT_Table[]; // 中断描述符表IDT结构，在内核执行头文件head.S中声明.globl IDT_Table
 extern unsigned int TSS64_Table[26];   // 任务状态段TSS64结构，在内核执行头文件head.S中声明.globl TSS64_Table
 
-/*do {...}while(0)；主要不是为了循环，而是为了利用do-while语句的一些特性，尤其是在宏定义和流程控制中
+/*do {...}while(0)（无需加;）的目的主要不是为了循环，而是为了利用do-while语句的一些特性，尤其是在宏定义和流程控制中
   1.将多条语句封装成一个“逻辑单条语句”（最常见和最重要的用途，尤其是在定义包含多条语句的宏时）
   为了让宏在任何需要单条语句的地方都能安全使用，并且允许用户在宏调用后像函数调用一样加上分号，避免语法错误和潜在的逻辑问题
   例子如下：

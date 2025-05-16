@@ -30,23 +30,22 @@
 #define PAGE_2M_MASK (~(PAGE_2M_SIZE - 1))				// 代表2MB数值的掩码，用于屏蔽低于2MB的数值
 #define PAGE_4K_MASK (~(PAGE_4K_SIZE - 1))				// 代表4KB数值的掩码，用于屏蔽低于4KB的数值
 
-//alloc_pages函数选择struct Zone内存段
-#define ZONE_DMA (1<<0)			//ZONE_DMA=1
-#define ZONE_NORMAL (1<<1)
-#define ZONE_UNMAPPED (1<<2)
+// struct Zone内存段的属性（alloc_pages函数的int zone_select参数）
+#define ZONE_DMA (1 << 0) 		// ZONE_DMA=1
+#define ZONE_NORMAL (1 << 1)	// ZONE_NORMAL=2
+#define ZONE_UNMAPPED (1 << 2)	// ZONE_UNMAPPED=4
 
-//struct Page的属性（alloc_pages函数的flag标记位参数）
-#define PG_PTable_Mapped (1<<0)
-#define PG_Kernel_Init (1<<1)
-#define PG_Referenced (1<<2)
-#define PG_Dirty (1<<3)
-#define PG_Active (1<<4)
-#define PG_Up_To_Date (1<<5)
-#define PG_Device (1<<6)
-#define PG_Kernel (1<<7)
-#define PG_K_Share_To_U (1<<8)
-#define PG_Slab (1<<9)
-
+// struct Page物理页的属性（alloc_pages函数的unsigned long page_flags参数）
+#define PG_PTable_Mapped (1 << 0)	//PG_PTable_Mapped=1
+#define PG_Kernel_Init (1 << 1)		//PG_Kernel_Init=2
+#define PG_Referenced (1 << 2)		//PG_Referenced=4
+#define PG_Dirty (1 << 3)			//PG_Dirty=8
+#define PG_Active (1 << 4)			//PG_Active=16
+#define PG_Up_To_Date (1 << 5)		//PG_Up_To_Date=32
+#define PG_Device (1 << 6)			//PG_Device=64
+#define PG_Kernel (1 << 7)			//PG_Kernel=128
+#define PG_K_Share_To_U (1 << 8)	//PG_K_Share_To_U=256
+#define PG_Slab (1 << 9)			//PG_Slab=512
 
 /*宏函数：将参数addr地址按2MB页的上边界对齐
   参数：
@@ -70,10 +69,34 @@
 */
 #define Phy_To_Virt(addr) ((unsigned long *)((unsigned long)(addr) + PAGE_OFFSET))
 
-//每种不同的可用物理内存区域的下标
-int ZONE_DMA_INDEX=0;		//memory.h中定义
-int ZONE_NORMAL_INDEX=0;	//低1GBRAM，已经被映射到页表中
-int ZONE_UNMAPPED_INDEX=0;	//高1GBRAM，还未被映射到页表中
+/*宏函数：重新赋值一次CR3寄存器，使更改后的页表项生效；因为更改页表项后原页表项依然缓存在TLB，重新加载页目录基地址到
+  CR3控制寄存器将迫使TLB自动更新
+  参数：无
+
+  指令部分：movq %%cr3,%0	//某一个输入/输出型寄存器=CR3
+		   movq %0,%%cr3   //CR3=某一个输入/输出型寄存器
+  输出部分：相关指令执行后，将结果存放至某一个输入/输出型寄存器，再转存到unsigned long tmpreg变量
+  输入部分：无
+  损坏描述：指令执行期间可能修改了内存，故使用memory声明
+*/
+#define flush_tlb()              \
+	do                           \
+	{                            \
+		unsigned long tmpreg;    \
+		__asm__ __volatile__(    \
+			"movq %%cr3,%0 \n\t" \
+			"movq %0,%%cr3 \n\t" \
+			: "=r"(tmpreg)       \
+			:                    \
+			: "memory");         \
+	} while (0)
+
+// 每种不同的物理内存区域的下标，目前Bochs虚拟机只能开辟2GB物理空间，以至于虚拟平台仅有一个可用物理内存段
+// 因此ZONE_DMA_INDEX、ZONE_NORMAL_INDEX、ZONE_UNMAPPED_INDEX均代表同一内存区域空间（使用默认值0代表）
+int ZONE_DMA_INDEX = 0;			  // DMA区域空间（memory.h中定义为0）
+int ZONE_NORMAL_INDEX = 0;		  // 低1GBRAM，已经被映射到页表中（memory.h中定义为0）
+int ZONE_UNMAPPED_INDEX = 0;	  // 高1GBRAM，还未被映射到页表中（memory.h中定义为0）
+unsigned long *Global_CR3 = NULL; // 全局变量保存CR3寄存器表示的PML4E顶层页目录物理基地址0x0000000000101000
 
 /*结构体：Memory_E820_Formate，用于数据解析；因为使用的物理地址空间信息已经在Loader引导加载程序中通过BIOS中断服务程序
   int 15h，AX=E820H获得，并保存在物理地址0x7E00处，本结构体就是存储从0x7E00提取的信息，每条物理地址空间信息占20B
@@ -155,8 +178,26 @@ struct Global_Memory_Descriptor
 };
 extern struct Global_Memory_Descriptor memory_management_struct; // 在main.c中定义
 
-unsigned long page_init(struct Page *page,unsigned long flags);
-
+unsigned long page_init(struct Page *page, unsigned long flags);
 void init_memory();
+struct Page *alloc_pages(int zone_select, int number, unsigned long page_flags);
+
+/*函数：读取CR3寄存器中的页目录物理基地址，并将其传递给函数调用者
+  参数：无
+  返回值：unsigned long *，即页目录物理基地址
+*/
+inline unsigned long *Get_gdt()
+{
+	unsigned long *tmp;
+	__asm__ __volatile__(
+		"movq %%cr3,%0 \n\t" // 某一个输入/输出型寄存器=CR3
+		// 输出部分：相关指令执行后，将结果存放至某一个输入/输出型寄存器，再转存到unsigned long *tmp变量
+		: "=r"(tmp)
+		// 输入部分：无
+		:
+		// 损坏描述：指令执行期间可能修改了内存，故使用memory声明
+		: "memory");
+	return tmp;
+}
 
 #endif
