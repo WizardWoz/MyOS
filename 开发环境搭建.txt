@@ -119,14 +119,14 @@ Name[zh_CN]=nasm
     "terminal.integrated.fontSize": 19,
     "debug.console.fontSize": 19
 }
-七、建立boot.img并存放boot.bin；loader.bin；kernel.bin......
-dd if=boot.bin of=boot.img bs=512 count=2880
+七、建立boot.img并存放boot.bin；loader.bin；kernel.bin等可执行文件......
+dd if=boot.bin of=boot.img bs=512 count=2880    #此时已经相当于将boot.img格式化成文件系统是FAT12的1.44MB软盘了
 sudo mount -t vfat -o loop boot.img /media/
 sudo cp loader.bin /media/
 sudo cp kernel.bin /media/
 sudo sync
 sudo umount /media/
-bochs -f ./.bochsrc
+bochs -f ./.bochsrc     #以第四步修改后的.bochsrc文件为默认配置文件启动bochs
 八、一些调试技巧（包括常用bochs的debug命令；system内核可执行文件的调试；boot.bin和loader.bin的调试）
 1.b 0x7C00：在地址0x7C00处打断点
 2.c (0x7C00)：一直执行直到遇到死循环或执行完毕当前程序（或者执行到地址为0x7C00的代码语句处）
