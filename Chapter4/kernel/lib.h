@@ -562,10 +562,10 @@ inline unsigned long bit_clean(unsigned long * addr,unsigned long nr)
 	return	*addr & (~(1UL << nr));
 }
 
-/*从设备端口读入8位（1B）数据
-  函数参数：
+/*函数：CPU从设备端口读入8位（1B）数据
+  参数：
   1.unsigned short port：16位设备端口号（0～65535）
-  函数返回值：unsigned char，存放从设备端口读出的1B数据
+  返回值：unsigned char，存放从设备端口读出的1B数据
 */
 inline unsigned char io_in8(unsigned short port)
 {
@@ -607,11 +607,11 @@ inline unsigned int io_in32(unsigned short port)
 	return ret;
 }
 
-/*将8位（1B）数据输出到设备端口
-  函数参数：
+/*函数：CPU将8位（1B）数据输出到设备端口
+  参数：
   1.unsigned short port：16位设备端口号（0～65535）
   2.unsigned char value：需要输出的1B数据
-  函数返回值：void
+  返回值：void
 */
 inline void io_out8(unsigned short port,unsigned char value)
 {

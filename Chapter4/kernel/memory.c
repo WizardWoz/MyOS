@@ -317,6 +317,8 @@ struct Page *alloc_pages(int zone_select, int number, unsigned long page_flags)
                 {
                     unsigned long l;
                     page = j + k - 1;
+                    //如果检索出满足条件的物理页组，便使用page_init将bit映射位图对应的内存页结构struct page初始化，
+                    //并使用goto find_free_pages返回第一个内存页结构的地址
                     for (l = 0; l < number; l++)
                     {
                         struct Page *x = memory_management_struct.pages_struct + page + l;
