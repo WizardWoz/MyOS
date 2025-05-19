@@ -284,25 +284,25 @@ struct Page *alloc_pages(int zone_select, int number, unsigned long page_flags)
     }
 
     // 已确定内存区域，接下来从该区域中遍历出符合申请条件的struct Page结构体组
-    for (i = zone_start; i <= zone_end; i++)    //从目标内存区域起始内存页结构开始遍历，直到内存区域空间的结尾
+    for (i = zone_start; i <= zone_end; i++) // 从目标内存区域起始内存页结构开始遍历，直到内存区域空间的结尾
     {
         struct Zone *z;
         unsigned long j;
-        //start存储当前内存区域的起始页号，end存储当前内存区域的结束页号，length存储当前内存区域长度
+        // start存储当前内存区域的起始页号，end存储当前内存区域的结束页号，length存储当前内存区域长度
         unsigned long start, end, length;
         unsigned long tmp;
         if ((memory_management_struct.zones_struct + i)->page_free_count < number)
         {
             continue;
         }
-        //起始内存页结构对应的bit映射位图往往位于非对齐（unsigned long类型）位置处，每次将按unsigned long类型
-        //作为步进长度，同时按unsigned long对齐，所以起始页的映射位图只能检索tmp=64-start%64次
+        // 起始内存页结构对应的bit映射位图往往位于非对齐（unsigned long类型）位置处，每次将按unsigned long类型
+        // 作为步进长度，同时按unsigned long对齐，所以起始页的映射位图只能检索tmp=64-start%64次
         z = memory_management_struct.zones_struct + i;
         start = z->zone_start_address >> PAGE_2M_SHIFT;
         end = z->zone_end_address >> PAGE_2M_SHIFT;
         length = z->zone_length >> PAGE_2M_SHIFT;
         tmp = 64 - start % 64;
-        //j += j % 64 ? tmp : 64将索引变量j调整到对齐位置
+        // j += j % 64 ? tmp : 64将索引变量j调整到对齐位置
         for (j = start; j <= end; j += j % 64 ? tmp : 64)
         {
             unsigned long *p = memory_management_struct.bits_map + (j >> 6);
@@ -310,15 +310,15 @@ struct Page *alloc_pages(int zone_select, int number, unsigned long page_flags)
             unsigned long k;
             for (k = shift; k < 64 - shift; k++)
             {
-                //为保证alloc_pages函数最多可检索出64个连续的物理页，使用(*p >> k) | (*(p + 1) << (64 - k))
-                //将后一个unsigned long变量的低位部分补齐到正在检索的变量
-                //对64位寄存器来说左移范围是0~63.当申请值number是64必须经过特殊处理number == 64 ? 0xFFFFFFFFFFFFFFFFUL : ((1UL << number) - 1)
+                // 为保证alloc_pages函数最多可检索出64个连续的物理页，使用(*p >> k) | (*(p + 1) << (64 - k))
+                // 将后一个unsigned long变量的低位部分补齐到正在检索的变量
+                // 对64位寄存器来说左移范围是0~63.当申请值number是64必须经过特殊处理number == 64 ? 0xFFFFFFFFFFFFFFFFUL : ((1UL << number) - 1)
                 if (!(((*p >> k) | (*(p + 1) << (64 - k))) & (number == 64 ? 0xFFFFFFFFFFFFFFFFUL : ((1UL << number) - 1))))
                 {
                     unsigned long l;
                     page = j + k - 1;
-                    //如果检索出满足条件的物理页组，便使用page_init将bit映射位图对应的内存页结构struct page初始化，
-                    //并使用goto find_free_pages返回第一个内存页结构的地址
+                    // 如果检索出满足条件的物理页组，便使用page_init将bit映射位图对应的内存页结构struct page初始化，
+                    // 并使用goto find_free_pages返回第一个内存页结构的地址
                     for (l = 0; l < number; l++)
                     {
                         struct Page *x = memory_management_struct.pages_struct + page + l;
@@ -331,5 +331,5 @@ struct Page *alloc_pages(int zone_select, int number, unsigned long page_flags)
     }
     return NULL;
 find_free_pages:
-    return (struct Page *)(memory_management_struct.pages_struct+page);
+    return (struct Page *)(memory_management_struct.pages_struct + page);
 }

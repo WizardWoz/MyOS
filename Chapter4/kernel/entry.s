@@ -63,6 +63,7 @@ RESTORE_ALL:
 
 ret_from_exception:
 
+
 .global ret_from_intr; ret_from_intr:
     jmp RESTORE_ALL
 

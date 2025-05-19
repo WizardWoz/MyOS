@@ -10,7 +10,7 @@
 #define ____cacheline_aligned __attribute__((__aligned__(L1_CACHE_BYTES)))
 
 #define SYMBOL_NAME(X) X
-//预处理操作符#：将其后的内容强制转换成字符串
+//预处理操作符#：将其后的内容强制转换成字符串（例：interrupt.c中Build_IRQ宏的应用）
 #define SYMBOL_NAME_STR(X) #X
 
 #define SYMBOL_NAME_LABEL(X) X##:

@@ -153,7 +153,7 @@ extern unsigned int TSS64_Table[26];   // 任务状态段TSS64结构，在内核
   函数参数：
   1.unsigned int n：中断向量号
   2.unsigned char ist：
-  3.void *addr：entry.S文件中各异常处理函数的标号对应的ENTRY()入口线性地址
+  3.void *addr：entry.S文件、interrupt.c等文件中各中断处理函数的标号对应的ENTRY()入口线性地址
   函数返回值：void
 */
 inline void set_intr_gate(unsigned int n, unsigned char ist, void *addr)

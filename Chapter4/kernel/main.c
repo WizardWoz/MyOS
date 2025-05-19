@@ -6,6 +6,7 @@
 #include "printk.h"
 #include "gate.h"
 #include "trap.h"
+#include "interrupt.h"
 #include "memory.h"
 
 /*经过声明后的extern变量（标识符）会被放在kernel.lds链接脚本指定的位置处*/
@@ -92,21 +93,25 @@ void Start_Kernel(void)
     color_printk(RED, BLACK, "memory init\n");
     init_memory();
 
-    color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *memory_management_struct.bits_map);
-    color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *(memory_management_struct.bits_map + 1));
-    page = alloc_pages(ZONE_NORMAL, 64, PG_PTable_Mapped | PG_Active | PG_Kernel);
-    // 虚拟平台前64个内存页结构的属性值被设置成0x91，而且物理地址从0x200000开始，与zonr_start_address成员变量记录一致
-    // 进而说明alloc_pages函数从本区域空间起始地址处分配物理内存页
-    // 区域空间第64，65内存页属性依然为0，说明这两个内存页未被分配过，bit映射位图从0x0000 0000 0000 0001和0x0000 0000 0000 0000
-    // 变为如今0xFFFF FFFF FFFF FFFF和0x0000 0000 0000 0001；同样是置位64个映射位
-    for (i = 0; i <= 64; i++)
-    {
-        color_printk(INDIGO, BLACK, "page%d\tattribute:%#018lx\taddress:%#018lx\t", i, (page + i)->attribute, (page + i)->PHY_address);
-        i++;
-        color_printk(INDIGO, BLACK, "page%d\tattribute:%#018lx\taddress:%#018lx\n", i, (page + i)->attribute, (page + i)->PHY_address);
-    }
-    color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *memory_management_struct.bits_map);
-    color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *(memory_management_struct.bits_map + 1));
+    // 4.5初级内存管理单元
+    // color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *memory_management_struct.bits_map);
+    // color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *(memory_management_struct.bits_map + 1));
+    // page = alloc_pages(ZONE_NORMAL, 64, PG_PTable_Mapped | PG_Active | PG_Kernel);
+    // // 虚拟平台前64个内存页结构的属性值被设置成0x91，而且物理地址从0x200000开始，与zonr_start_address成员变量记录一致
+    // // 进而说明alloc_pages函数从本区域空间起始地址处分配物理内存页
+    // // 区域空间第64，65内存页属性依然为0，说明这两个内存页未被分配过，bit映射位图从0x0000 0000 0000 0001和0x0000 0000 0000 0000
+    // // 变为如今0xFFFF FFFF FFFF FFFF和0x0000 0000 0000 0001；同样是置位64个映射位
+    // for (i = 0; i <= 64; i++)
+    // {
+    //     color_printk(INDIGO, BLACK, "page%d\tattribute:%#018lx\taddress:%#018lx\t", i, (page + i)->attribute, (page + i)->PHY_address);
+    //     i++;
+    //     color_printk(INDIGO, BLACK, "page%d\tattribute:%#018lx\taddress:%#018lx\n", i, (page + i)->attribute, (page + i)->PHY_address);
+    // }
+    // color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *memory_management_struct.bits_map);
+    // color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *(memory_management_struct.bits_map + 1));
+
+    color_printk(RED,BLACK,"interrupt init\n");
+    init_interrupt();
 
     while (1)
     {

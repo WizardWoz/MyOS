@@ -7,8 +7,8 @@ all:		system
 	objcopy -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary system kernel.bin
 #使用链接脚本Kernel.lds将编译生成的head.o与main.o链接成可执行内核程序文件system（链接）
 #只有system文件记录着内核程序各个段信息，并显示出程序的每个段地址以及其他相关信息
-system:		head.o entry.o printk.o trap.o memory.o main.o
-	ld -b elf64-x86-64 -z muldefs -o system head.o entry.o printk.o trap.o memory.o main.o -T Kernel.lds
+system:		head.o entry.o printk.o trap.o memory.o interrupt.o main.o
+	ld -b elf64-x86-64 -z muldefs -o system head.o entry.o printk.o trap.o memory.o interrupt.o main.o -T Kernel.lds
 #为head.S生成编译文件head.o，非可执行程序（编译）
 head.o:		head.S
 	gcc -E head.S > head.s
@@ -26,6 +26,9 @@ trap.o: 	trap.c
 #为memory.c生成编译文件memory.o（编译）
 memory.o: 	memory.c
 	gcc -mcmodel=large -fno-builtin -m64 -c memory.c
+#为interrupt.c生成编译文件interrupt.o（编译）
+interrupt.o: 	interrupt.c
+	gcc -mcmodel=large -fno-builtin -m64 -c interrupt.c
 #为main.c生成编译文件main.o（编译）
 main.o:		main.c
 	gcc -mcmodel=large -fno-builtin -m64 -c main.c
