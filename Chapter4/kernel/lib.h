@@ -1,4 +1,5 @@
-/*在很多操作系统开发场景中，C语言无法完全代替汇编语言，例如：操作某些特殊寄存器，某些IO端口，或对性能要求极为苛刻的场景
+/*
+  在很多操作系统开发场景中，C语言无法完全代替汇编语言，例如：操作某些特殊寄存器，某些IO端口，或对性能要求极为苛刻的场景
   此时我们必须要在C语言中内嵌汇编语言满足上述要求
 */
 #ifndef __LIB_H__
@@ -7,6 +8,7 @@
 #define NULL 0
 
 /*
+  
 */
 #define container_of(ptr,type,member)							\
 ({											\
@@ -14,7 +16,8 @@
 	(type *)((unsigned long)p - (unsigned long)&(((type *)0)->member));		\
 })
 
-/*C语言使用关键字__asm__和__volatile__修饰汇编语句，符合ANSI C标准
+/*
+  C语言使用关键字__asm__和__volatile__修饰汇编语句，符合ANSI C标准
   __asm__是关键字asm的宏定义，声明该行代码是一个内嵌汇编表达式，任何内嵌汇编语言表达式均以此为开头，必不可少
   __volatile__告诉编译器此行代码不能被编译器优化，因为经过优化后汇编语句很可能被修改从而无法达到预期效果
   GNU C语言内嵌汇编表达式由四部分构成：指令部分:输出部分:输入部分:损坏部分（冒号:必须存在）
@@ -55,7 +58,8 @@
 #define nop() 		__asm__ __volatile__ ("nop	\n\t")
 #define io_mfence() 	__asm__ __volatile__ ("mfence	\n\t":::"memory")
 
-/*内核数据结构：不带头结点的双向链表
+/*
+  内核数据结构：不带头结点的双向链表
   数据成员：
   1.struct List* prev：指向前驱结点的指针
   2.struct List* next：指向后继结点的指针
@@ -65,14 +69,16 @@ struct List
 	struct List * prev;
 	struct List * next;
 };
-/*inline关键字：建议编译器将被 inline 修饰的函数调用，在调用处展开为函数体本身的指令，从而避免函数调用的开销（如参数压栈、跳转、返回地址保存、栈帧恢复等）
+/*
+  inline关键字：建议编译器将被 inline 修饰的函数调用，在调用处展开为函数体本身的指令，从而避免函数调用的开销（如参数压栈、跳转、返回地址保存、栈帧恢复等）
   与宏定义#define相比，inline函数有自己的作用域；遵循C语言类型检查规则；通常更容易调试
 */
 
-/*不带头结点的双向链表初始化
-  函数参数：
+/*
+  函数：不带头结点的双向链表初始化
+  参数：
   1.struct List* list：双向链表初始结点
-  函数返回值：void
+  返回值：void
 */
 inline void list_init(struct List * list)
 {
@@ -80,11 +86,12 @@ inline void list_init(struct List * list)
 	list->next = list;
 }
 
-/*不带头结点的双向链表在原结点后插入一个新结点
-  函数参数：
+/*
+  函数：不带头结点的双向链表在原结点后插入一个新结点
+  参数：
   1.struct List* entry：原双向链表的某个结点
   2.struct List* new：需要插入的新结点
-  函数返回值：void
+  返回值：void
 */
 inline void list_add_to_behind(struct List * entry,struct List * new)
 {
@@ -94,11 +101,12 @@ inline void list_add_to_behind(struct List * entry,struct List * new)
 	entry->next = new;
 }
 
-/*不带头结点的双向链表在原结点前插入一个新结点
-  函数参数：
+/*
+  函数：不带头结点的双向链表在原结点前插入一个新结点
+  参数：
   1.struct List* entry：原双向链表的某个结点
   2.struct List* new：需要插入的新结点
-  函数返回值：void
+  返回值：void
 */
 inline void list_add_to_before(struct List * entry,struct List * new)
 {
@@ -108,10 +116,11 @@ inline void list_add_to_before(struct List * entry,struct List * new)
 	entry->prev = new;
 }
 
-/*不带头结点的双向链表删除某结点
-  函数参数：
+/*
+  函数：不带头结点的双向链表删除某结点
+  参数：
   1.struct List* entry：原双向链表需要删除的某个结点
-  函数返回值：void
+  返回值：void
 */
 inline void list_del(struct List * entry)
 {
@@ -119,10 +128,11 @@ inline void list_del(struct List * entry)
 	entry->prev->next = entry->next;
 }
 
-/*判断不带头结点的双向链表是否为空链表
-  函数参数：
+/*
+  函数：判断不带头结点的双向链表是否为空链表
+  参数：
   1.struct List* entry：原双向链表的头结点
-  函数返回值：long，返回1表示原双向链表为空链表，返回0表示非空链表
+  返回值：long，返回1表示原双向链表为空链表，返回0表示非空链表
 */
 inline long list_is_empty(struct List * entry)
 {
@@ -132,10 +142,11 @@ inline long list_is_empty(struct List * entry)
 		return 0;
 }
 
-/*求不带头结点的双向链表中某个结点的前驱结点
-  函数参数：
+/*
+  函数：求不带头结点的双向链表中某个结点的前驱结点
+  参数：
   1.struct List* entry：原双向链表的某个结点
-  函数返回值：struct List*，指向前驱结点
+  返回值：struct List*，指向前驱结点
 */
 inline struct List * list_prev(struct List * entry)
 {
@@ -145,10 +156,11 @@ inline struct List * list_prev(struct List * entry)
 		return NULL;
 }
 
-/*求不带头结点的双向链表中某个结点的后继结点
-  函数参数：
+/*
+  函数：求不带头结点的双向链表中某个结点的后继结点
+  参数：
   1.struct List* entry：原双向链表的某个结点
-  函数返回值：struct List*，指向后继结点
+  返回值：struct List*，指向后继结点
 */
 inline struct List * list_next(struct List * entry)
 {
@@ -158,7 +170,8 @@ inline struct List * list_next(struct List * entry)
 		return NULL;
 }
 
-/*void*指针：void* 指针指向一个void类型。表示没有特定类型。意味着void*指针可以指向内存中的任何数据，但它不知道所指向的数据具体是什么类型
+/*
+  void*指针：void* 指针指向一个void类型。表示没有特定类型。意味着void*指针可以指向内存中的任何数据，但它不知道所指向的数据具体是什么类型
   1.可以将任何对象的指针（指向数据类型的指针，而不是函数指针，尽管有些编译器允许函数指针但这不符合C语言标准）隐式地赋值给一个void* 指针，反之亦然
   将void*赋值给其他对象指针类型时，通常推荐进行显式类型转换以提高代码可读性和安全性，尽管C语言标准允许隐式转换）
   2.不能直接解引用，例：不能直接通过*pv来访问void*所指向的数据。因为编译器不知道数据类型，也就不知道要读取多少个字节
@@ -166,8 +179,9 @@ inline struct List * list_next(struct List * entry)
   但GNU GCC等编译器作为扩展允许对void*进行指针算术，并将其视为char*来进行计算（即每次加减1个字节）。强烈不推荐依赖此特性，因为它不可移植且违反标准。
 */
 
-/*内存块拷贝函数
-  函数参数：
+/*
+  函数：内存块拷贝函数
+  参数：
   1.void* From：源内存块起始地址；
   2.void* To：目的内存块起始地址；
   3.long Num：字符串总长度
@@ -211,12 +225,13 @@ inline void * memcpy(void *From,void * To,long Num)
 	return To;      //返回目标内存块首地址
 }
 
-/*内存块比较函数
-  函数参数：
+/*
+  函数内存块比较函数
+  参数：
   1.void* FirstPart：第一个内存块首地址；
   2.void* SecondPart：第二个内存块首地址；
   3.long Count：需要对比的内存块数
-  函数返回值：int，为0则FirstPart内存块=SecondPart内存块；为1则FirstPart内存块>SecondPart内存块；为-1则FirstPart内存块<SecondPart内存块
+  返回值：int，为0则FirstPart内存块=SecondPart内存块；为1则FirstPart内存块>SecondPart内存块；为-1则FirstPart内存块<SecondPart内存块
 */
 inline int memcmp(void * FirstPart,void * SecondPart,long Count)
 {
@@ -249,12 +264,13 @@ inline int memcmp(void * FirstPart,void * SecondPart,long Count)
 	return __res;
 }
 
-/*内存空间初始化函数
-  函数参数：
+/*
+  函数：内存空间初始化函数
+  参数：
   1.void* Address：内存块的起始地址
   2.unsigned char C：将连续的Count数量内存单元初始化为该字符
   3.long Count：以Address为首地址的内存单元数
-  函数返回值：void*，即指向内存块的起始地址void* Address
+  返回值：void*，即指向内存块的起始地址void* Address
 */
 inline void * memset(void * Address,unsigned char C,long Count)
 {
@@ -297,11 +313,12 @@ inline void * memset(void * Address,unsigned char C,long Count)
 	return Address;
 }
 
-/*字符串复制函数（到达源字符串末尾'\0'自动停止）
-  函数参数：
+/*
+  函数：字符串复制函数（到达源字符串末尾'\0'自动停止）
+  参数：
   1.char* Dest：目的字符串起始地址
   2.char* Src：源字符串起始地址
-  函数返回值：char*，指向目的字符串起始地址char* Dest
+  返回值：char*，指向目的字符串起始地址char* Dest
 */
 inline char * strcpy(char * Dest,char * Src)
 {
@@ -326,12 +343,13 @@ inline char * strcpy(char * Dest,char * Src)
 	return 	Dest;
 }
 
-/*字符串复制函数（函数参数规定复制长度）
-  函数参数：
+/*
+  函数：字符串复制函数（函数参数规定复制长度）
+  参数：
   1.char* Dest：目的字符串起始地址
   2.char* Src：源字符串起始地址
   3.long Count：需要复制的字符串长度
-  函数返回值：char*，指向目的字符串起始地址char* Dest
+  返回值：char*，指向目的字符串起始地址char* Dest
 */
 inline char * strncpy(char * Dest,char * Src,long Count)
 {
@@ -365,11 +383,12 @@ inline char * strncpy(char * Dest,char * Src,long Count)
 	return Dest;
 }
 
-/*字符串拼接函数（到达需要拼接的字符串末尾则停止）
-  函数参数：
+/*
+  函数字符串拼接函数（到达需要拼接的字符串末尾则停止）
+  参数：
   1.char* Dest：目的字符串起始地址
   2.char* Src：源字符串起始地址
-  函数返回值：char*，指向目的字符串起始地址char* Dest
+  返回值：char*，指向目的字符串起始地址char* Dest
 */
 inline char * strcat(char * Dest,char * Src)
 {
@@ -403,11 +422,12 @@ inline char * strcat(char * Dest,char * Src)
 	return Dest;
 }
 
-/*字符串比较函数（比较到字符串末尾为止）
-  函数参数：
+/*
+  函数：字符串比较函数（比较到字符串末尾为止）
+  参数：
   1.char* FirstPart：第一个字符串起始地址
   2.char* SecondPart：第二个字符串起始地址
-  函数返回值：int，第一个字符串=第二个字符串为0；第一个字符串>第二个字符串为1；第一个字符串<第二个字符串为-1
+  返回值：int，第一个字符串=第二个字符串为0；第一个字符串>第二个字符串为1；第一个字符串<第二个字符串为-1
 */
 inline int strcmp(char * FirstPart,char * SecondPart)
 {
@@ -448,12 +468,13 @@ inline int strcmp(char * FirstPart,char * SecondPart)
 	return __res;
 }
 
-/*字符串比较函数（比较Count数目个字符为止）
-  函数参数：
+/*
+  函数：字符串比较函数（比较Count数目个字符为止）
+  参数：
   1.char* FirstPart：第一个字符串起始地址
   2.char* SecondPart：第二个字符串起始地址
   3.long Count：需比较的字符串长度
-  函数返回值：int，第一个字符串=第二个字符串为0；第一个字符串>第二个字符串为1；第一个字符串<第二个字符串为-1
+  返回值：int，第一个字符串=第二个字符串为0；第一个字符串>第二个字符串为1；第一个字符串<第二个字符串为-1
 */
 
 inline int strncmp(char * FirstPart,char * SecondPart,long Count)
@@ -499,10 +520,11 @@ inline int strncmp(char * FirstPart,char * SecondPart,long Count)
 	return __res;
 }
 
-/*求字符串长度
-  函数参数：
+/*
+  函数：求字符串长度
+  参数：
   1.char* String：所指向字符串的首地址
-  函数返回值：int，该字符串总长度
+  返回值：int，该字符串总长度
 */
 inline int strlen(char * String)
 {
@@ -529,40 +551,44 @@ inline int strlen(char * String)
 	return __res;
 }
 
-/*设置内存块的某个位为1
-  函数参数：
+/*
+  函数：设置内存块的某个位为1
+  参数：
   1.unsigned long* addr：内存块首地址指针
   2.unsigned long nr：需要设置的位的位置
-  函数返回值：unsigned long，设置后的值
+  返回值：unsigned long，设置后的值
 */
 inline unsigned long bit_set(unsigned long * addr,unsigned long nr)
 {
 	return *addr | (1UL << nr);
 }
 
-/*获取某个内存块的位的值
-  函数参数：
+/*
+  函数：获取某个内存块的位的值
+  参数：
   1.unsigned long* addr：内存块首地址指针
   2.unsigned long nr：需要获取具体值的位的位置
-  函数返回值：unsigned long，获取到的位的值
+  返回值：unsigned long，获取到的位的值
 */
 inline unsigned long bit_get(unsigned long * addr,unsigned long nr)
 {
 	return	*addr & (1UL << nr);
 }
 
-/*清除内存块中的某个位，使其为0
-  函数参数：
+/*
+  函数清除内存块中的某个位，使其为0
+  参数：
   1.unsigned long* addr：内存块首地址指针
   2.unsigned long nr：需要获取具体值的位的位置
-  函数返回值：unsigned long，将某个位取0后的addr指向的内存块所存储的值
+  返回值：unsigned long，将某个位取0后的addr指向的内存块所存储的值
 */
 inline unsigned long bit_clean(unsigned long * addr,unsigned long nr)
 {
 	return	*addr & (~(1UL << nr));
 }
 
-/*函数：CPU从设备端口读入8位（1B）数据
+/*
+  函数：CPU从设备端口读入8位（1B）数据
   参数：
   1.unsigned short port：16位设备端口号（0～65535）
   返回值：unsigned char，存放从设备端口读出的1B数据
@@ -587,10 +613,11 @@ inline unsigned char io_in8(unsigned short port)
 	return ret;
 }
 
-/*从设备端口读入32位（4B）数据
-  函数参数：
+/*
+  函数：从设备端口读入32位（4B）数据
+  参数：
   1.unsigned short port：16位设备端口号（0～65535）
-  函数返回值：unsigned int，存放从设备端口读出的4B数据
+  返回值：unsigned int，存放从设备端口读出的4B数据
 */
 inline unsigned int io_in32(unsigned short port)
 {
@@ -607,7 +634,8 @@ inline unsigned int io_in32(unsigned short port)
 	return ret;
 }
 
-/*函数：CPU将8位（1B）数据输出到设备端口
+/*
+  函数：CPU将8位（1B）数据输出到设备端口
   参数：
   1.unsigned short port：16位设备端口号（0～65535）
   2.unsigned char value：需要输出的1B数据
@@ -626,11 +654,12 @@ inline void io_out8(unsigned short port,unsigned char value)
 				:"memory");
 }
 
-/*函数：将32位（4B）数据输出到设备端口
-  函数参数：
+/*
+  函数：将32位（4B）数据输出到设备端口
+  参数：
   1.unsigned short port：16位设备端口号（0～65535）
   2.unsigned int value：需要输出的4B数据
-  函数返回值：void
+  返回值：void
 */
 inline void io_out32(unsigned short port,unsigned int value)
 {
@@ -645,7 +674,8 @@ inline void io_out32(unsigned short port,unsigned int value)
 				:"memory");
 }
 
-/*宏定义：从port端口读入buffer指向的内存块中的nr*2字节数据
+/*
+  宏定义：从port端口读入buffer指向的内存块中的nr*2字节数据
   参数：
   1.port：16位设备端口号（0～65535）
   2.buffer：64位指针，指向源内存块
@@ -662,7 +692,8 @@ inline void io_out32(unsigned short port,unsigned int value)
 #define port_insw(port,buffer,nr)	\
 __asm__ __volatile__("cld;rep;insw;mfence;"::"d"(port),"D"(buffer),"c"(nr):"memory")
 
-/*宏定义：将nr*2字节数据从port端口输出到buffer指向的内存块中
+/*
+  宏定义：将nr*2字节数据从port端口输出到buffer指向的内存块中
   参数：
   1.port：16位设备端口号（0～65535）
   2.buffer：64位指针，指向目的内存块
