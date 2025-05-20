@@ -3,15 +3,46 @@
 
 #include "lib.h"
 #include "memory.h"
+#include "cpu.h"
 
+#define KERNEL_CS 0x08
+#define KERNEL_DS 0x10
+#define STACK_SIZE 32768            //表示进程的内核栈空间和struct task_struct结构体占用存储空间总量为32768B（32KB）
+
+#define TASK_RUNNING (1<<0)         //进程运行态=1
+#define TASK_INTERRUPTIBLE (1<<1)   //进程阻塞态=2
+#define TASK_UNINTERRUPTIBLE (1<<2) //进程就绪态=4
+#define TASK_ZOMBIE (1<<3)          //进程挂起态=8
+#define TASK_STOPPED (1<<4)         //进程终止态=16
+
+#define PF_KTHREAD (1<<0)           //进程标志：内核级线程=1
+
+/*
+  内存空间分布结构体：描述进程的页表结构和各程序段信息（页目录基地址、代码段、数据段、只读数据段、应用层栈地址等）
+*/
 struct mm_struct
 {
-    /* data */
+    pml4t_t *pgd;//pml4t_t是typedef unsigned long pml4t; 保存CR3控制寄存器值（页目录基地址和页表属性的组合值）
+    unsigned long start_code,end_code;      //代码段空间
+    unsigned long start_data,end_data;      //数据段空间
+    unsigned long start_rodata,end_rodata;  //只读数据段空间
+    unsigned long start_brk,end_brk;        //动态内存分配区（堆区域）
+    unsigned long start_stack;              //应用层栈基地址
 };
 
+/*
+  当进程发生调度切换时，保存执行现场的寄存器值，以备再次执行时使用
+*/
 struct thread_struct
 {
-    /* data */
+    unsigned long rsp0;         //内核栈基地址（位于任务状态段TSS）
+    unsigned long rip;          //内核层代码指针
+    unsigned long rsp;          //内核层当前栈指针
+    unsigned long fs;           //FS段寄存器
+    unsigned long gs;           //GS段寄存器
+    unsigned long cr2;          //CR2控制寄存器
+    unsigned long trap_nr;      //产生异常的异常号
+    unsigned long error_code;   //异常的错误码
 };
 
 /*
@@ -32,19 +63,180 @@ struct thread_struct
   volatile: 这个内存位置的值可能在程序控制之外被改变（例如，由硬件更新），所以每次读取都必须从内存进行
 */
 
-//程序进程控制结构体（进程控制块PCB）
+/*
+  程序进程控制结构体（进程控制块PCB）：用于记录进程的资源使用情况（软件/硬件资源）和运行态信息等
+*/
 struct task_struct
 {
     struct List list;       //双向链表，连接各进程控制结构体（进程控制块PCB）
-    volatile long state;    //进程状态：运行态
-    unsigned long flags;
-    struct mm_struct *mm;
-    struct thread_struct *thread;
-    unsigned long addr_limit;//
-    long pid;
-    long counter;
-    long signal;
-    long priority;
+    volatile long state;    //进程状态：就绪态、运行态、阻塞态、可中断态等等
+    unsigned long flags;    //进程标志：进程、线程、内核线程
+    struct mm_struct *mm;   //内存空间分布结构体，记录内存页表和程序段信息
+    struct thread_struct *thread;   //进程切换时保留的状态信息（执行现场的寄存器值）
+    //进程地址空间范围：0x0000 0000 0000 0000~0x0000 7FFFF FFFF FFFF是应用层；0xFFFF 8000 0000 0000~0xFFFF FFFF FFFF FFFF是内核层
+    unsigned long addr_limit;
+    long pid;               //进程ID号
+    long counter;           //进程可用时间片
+    long signal;            //进程拥有的信号量
+    long priority;          //进程优先级
 };
+
+/*
+  进程内核层栈空间实现：借鉴Linux内核的设计思想，把进程控制结构体struct_task_struct与进程的内核层栈空间融为一体
+  低地址处存放struct task_struct进程控制块PCB，高地址处作为进程的内核层栈空间
+  Intel i386处理器架构的Linux内核中，进程默认使用8KB内核层栈空间；由于64位处理器寄存器位宽扩大一倍，相应栈空间也必须扩大，
+  不清楚应该扩大多少算合理，所以暂时将其设定为32KB，等到存储空间不足时再扩容
+
+  此联合体（使用__attribute__属性修饰）共占用32KB存储空间，并将这段空间按8B进行对齐，实际上该联合体的起始地址必须按照32KB字节对齐
+  __attribute__((aligned(N))) 用于变量或类型，指定其最小对齐字节数。N必须是2的幂。这对于需要特定内存对齐以提高性能或满足硬件要求的场景非常有用。
+*/
+union task_union
+{
+    struct task_struct task;        //进程控制结构体（进程控制块PCB）1KB
+	//STACKSIZE=32768；sizeof(unsigned long)=8；进程内核层栈空间=32768/8=4096，又因为每个元素是unsigned long类型，所以总大小为32KB
+    unsigned long stack[STACK_SIZE/sizeof(unsigned long)];
+}__attribute__((aligned(8)));
+
+struct mm_struct init_mm;
+struct thread_struct init_thread;
+
+/*
+  宏函数：INIT_TASK，将union task_union实例化成全局变量init_task_union，并将其作为操作系统的第一个进程
+  参数：
+  1.tsk：struct task_struct task，进程控制结构体（进程控制块PCB）
+
+  INIT_TASK没有初始化所属的进程双向链表
+  进程状态：.state(volatile long state)=TASK_UNINTERRUPTIBLE（进程就绪态=4）
+  进程标志：.flags(unsigned long flags)=PF_KTHREAD（内核级线程=1）
+  进程内存空间分布结构体：.mm=声明的全局结构体struct mm_struct init_mm（还未初始化）
+  进程运行现场：.thread=声明的全局结构体struct thread_struct init_thread（还未初始化）
+  进程地址空间范围：.addr_limit=0xFFFF800000000000，位于内核层
+  进程ID号：.pid=0，第一个进程（内核级线程）
+  进程可用时间片：.counter=1，初始时每次调度只能运行一个CPU时间片
+  进程拥有的信号量：.signal=0，初始时只有0个信号量
+  进程优先级：.priority=0，最高优先级
+*/
+#define INIT_TASK(tsk)              \
+{                                   \
+    .state=TASK_UNINTERRUPTIBLE,    \
+    .flags=PF_KTHREAD,              \
+    .mm=&init_mm,                   \
+    .thread=&init_thread,           \
+    .addr_limit=0xFFFF800000000000, \
+    .pid=0,                         \
+    .counter=1,                     \
+    .signal=0,                      \
+    .priority=0                     \
+}
+
+/*
+  全局变量union task_union init_task_union使用__attribute__((__section__(".data.init_task")))修饰
+  将该全局变量连接到一个特殊的程序段内。在链接脚本Kernel.lds中为这个特别的程序段规划了地址空间
+*/
+union task_union init_task_union __attribute__((__section__(".data.init_task")))={
+    INIT_TASK(init_task_union.task)
+};
+
+/*
+  进程控制结构体（进程控制块PCB）*init_task指针数组是为各处理器创建的初始进程控制结构体，
+  目前只有数组的第0个元素投入使用，剩余成员将在多核处理器初始化后予以创建
+*/
+struct task_struct *init_task[NR_CPUS]={&init_task_union.task,0};
+struct mm_struct init_mm={0};
+struct thread_struct init_thread=
+{
+	//内核栈基地址（位于任务状态段TSS）=全局变量init_task_union的stack数组变量首地址+4096
+	.rsp0=(unsigned long)(init_task_union.stack+STACK_SIZE/sizeof(unsigned long)),
+	//内核层代码指针=全局变量init_task_union的stack数组变量首地址+4096
+	.rsp=(unsigned long)(init_task_union.stack+STACK_SIZE/sizeof(unsigned long)),
+	.fs=KERNEL_DS,
+	.gs=KERNEL_DS,	//FS=GS=KERNEL_DS=0x10
+	.cr2=0,			//CR2控制寄存器=0
+	.trap_nr=0,		//产生异常的异常号=0
+	.error_code=0	//异常的错误码=0
+};
+
+/*
+  IA-32e（64位长模式）的TSS结构（在head.S中的内核数据段中有定义.globl TSS64_Table）
+  __attribute__((packed)) 用于结构体或联合体，告诉编译器尽可能地压缩其成员，减少内存占用，不进行字节对齐填充。
+*/
+struct tss_struct
+{
+	unsigned int reserved0;			//第一个4B保留字段
+	unsigned long rsp0;				//栈顶指针rsp0
+	unsigned long rsp1;				//栈顶指针rsp1
+	unsigned long rsp2;				//栈顶指针rsp2
+	unsigned long reserved1;		//第二个8B保留字段
+	unsigned long ist1;					
+	unsigned long ist2;
+	unsigned long ist3;
+	unsigned long ist4;
+	unsigned long ist5;
+	unsigned long ist6;
+	unsigned long ist7;
+	unsigned long reserved2;		//第三个8B保留字段
+	unsigned short reserved3;		//第四个2B保留字段
+	unsigned short iomapbaseaddr;	//I/O映射的地址字段
+}__attribute__((packed));
+
+/*
+  宏函数：初始化任务状态段TSS结构
+  
+  四个保留字段均设置为0：.reserved0=0；.reserved1=0；.reserved2=0；.reserved3=0
+  .rsp0、.rsp1、.rsp2内核栈基地址（位于任务状态段TSS）=全局变量init_task_union的stack数组变量首地址+4096
+*/
+#define INIT_TSS					\
+{	.reserved0=0,					\
+	.rsp0=(unsigned long)(init_task_union.stack+STACK_SIZE/sizeof(unsigned long)),	\
+	.rsp1=(unsigned long)(init_task_union.stack+STACK_SIZE/sizeof(unsigned long)),	\
+	.rsp2=(unsigned long)(init_task_union.stack+STACK_SIZE/sizeof(unsigned long)),	\
+	.reserved1=0,					\
+	.ist1=0xFFFF800000007C00,		\
+	.ist2=0xFFFF800000007C00,		\
+	.ist3=0xFFFF800000007C00,		\
+	.ist4=0xFFFF800000007C00,		\
+	.ist5=0xFFFF800000007C00,		\
+	.ist6=0xFFFF800000007C00,		\
+	.ist7=0xFFFF800000007C00,		\
+	.reserved2=0,					\
+	.reserved3=0,					\
+	.iomapbaseaddr=0				\
+}
+
+//使用了GNU C的一个扩展功能，称为“指定初始化范围”（Designated Initializer Range）或“范围指定符”（Range Designator）。
+//[first ... last]=value这种语法表示将数组中从索引first到索引last（包含first和 last）的所有元素都初始化为value。
+struct tss_struct init_tss[NR_CPUS]={[0 ... NR_CPUS-1] =INIT_TSS};
+
+/*
+  函数：借鉴Linux源码，用于获得当前struct task_struct结构体（借助Kernel.lds的32KB对齐技巧）
+  参数：无
+  返回值：struct task_struct *，指向当前struct task_struct结构体的指针
+
+  指令部分：
+  andq %%rsp,%0	//将栈指针寄存器RSP与0xFFFF FFFF FFFF 8000进行逻辑与，结果是当前进程struct task_struct结构体的基地址
+  输出部分：相关指令执行后，将结果写入任意通用寄存器，并转存至struct task_struct *current指针
+  输入部分：所有指令执行前，指令需要使用的寄存器被初始化为(~32767UL)=0xFFFF FFFF FFFF 8000
+  损坏描述：无
+*/
+inline struct task_struct *get_current()
+{
+	struct task_struct *current=NULL;		//指向当前struct task_struct结构体的*current指针
+	__asm__ __volatile__ ("andq %%rsp,%0 \n\t":"=r"(current):"0"(~32767UL));
+	return current;
+}
+
+#define current get_current()	//宏定义，current宏即调用get_current()函数
+
+/*
+  宏函数：借鉴Linux源码，用于获得当前struct task_struct结构体（借助Kernel.lds的32KB对齐技巧）与get_current()函数实现的功能相同
+  
+  指令部分：
+  movq %rsp,%rbx	//RBX=栈指针寄存器RSP
+  andq $-32768,%rbx	//$-32768=0xFFFF FFFF FFFF 8000（补码表示），RBX与0xFFFF FFFF FFFF 8000进行逻辑与，
+  结果是当前进程struct task_struct结构体的基地址
+*/
+#define GET_CURRENT				\
+	"movq %rsp,%rbx \n\t"		\
+	"andq $-32768,%rbx \n\t"	\
 
 #endif
