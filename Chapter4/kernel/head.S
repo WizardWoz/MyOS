@@ -205,12 +205,12 @@ __PML4E:		//Page Map Level 4顶层页目录表占用4096B=4KB，因为一个页�
 	.quad 0x102007	//8B
 	.fill 255,8,0	//255*8=2040B
 .org 0x2000		//Page Directory Pointer二层页目录表位于0x2000偏移处；所以页目录起始线性地址为0xffff800000102000
-__PDPTE:		//Page Directory Pointer二层页目录表占用4KB
+__PDPTE:		//Page Directory Pointer二层页目录表占用4096B=4KB
 	//0000 0000 0000 | 0000 0000 0000 0000 0000 0000 0000 0001 0000 0011 | 0000 0000 0011
 	.quad 0x103003	//8B	所以PDT基地址为0x0000 0000 0010 3000
 	.fill 511,8,0	//511*8=4088B
 .org 0x3000		//Page Directory Table页目录表位于0x3000偏移处；所以页目录起始线性地址为0xffff800000103000
-__PDE:			//Page Directory Table页目录表占用4KB
+__PDE:			//Page Directory Table页目录表占用4096B=4KB
 	//从此映射到线性地址0x0000000000000000（5个2MB物理页，共10MB地址空间）
 	//0000 0000 0000 | 0000 0000 0000 0000 0000 0000 0000 000|0 0000 0000 0000 1000 0011：0x0000 0000 0000 0000
 	.quad 0x000083
