@@ -137,7 +137,7 @@ bochs -f ./.bochsrc     #以第四步修改后的.bochsrc文件为默认配置�
 7.x /40bx 0x7C00：查看线性地址0x7C00处内存的内容（40：40个内存单元，b：以字节为单位，x：十六进制显示）
 8.xp /40bx 0x7C00：查看物理地址0x7C00处内存的内容（40：40个内存单元，b：以字节为单位，x：十六进制显示）
 9.调试boot.bin和loader.bin，一般是通过在代码中插入死循环语句jmp $
-10.调试system内核，用objdump -D system得到各个函数的入口地址；例如Start_Kernel：0x000000104771；color_printk：0x000000105AEC
+10.调试system内核（不要调试kernel.bin，详细原因在head.S），用objdump -D system得到各个函数的入口地址；例如Start_Kernel：0x000000104771；color_printk：0x000000105AEC
    在调用函数的call指令处打断点，在函数出口的ret指令处打断点，之后执行<bochs: > c命令，在此期间通过各种命令查看寄存器和内存
 九、Git和GitHub的一些使用技巧
 1.安装git通常使用yum install命令或者直接下载rpm包
