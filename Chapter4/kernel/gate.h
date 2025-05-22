@@ -1,21 +1,20 @@
 #ifndef __GATE_H__
 #define __GATE_H__
 
-/*段描述符结构体
- */
+/*段描述符结构体*/
 struct desc_struct
 {
-	unsigned char x[8];
+	unsigned char x[8];   //每个段描述符占用8B
 };
 
-/*调用门描述符结构体
- */
+/*调用门描述符结构体*/
 struct gate_struct
 {
-	unsigned char x[16];
+	unsigned char x[16];  //每个调用门描述符占用16B
 };
 
-/*extern是C语言中的一个存储类说明符（storage class specifier）它的主要作用是声明一个变量或函数，
+/*
+  extern是C语言中的一个存储类说明符（storage class specifier）它的主要作用是声明一个变量或函数，
   表明这个变量或函数是在其他地方定义的（可能是在同一个文件的后面，或者更常见的是在另一个C文件中）
 */
 
