@@ -16,10 +16,13 @@
   1.前两个int类型/较小类型参数从左向右进入ECX、EDX；剩余参数从右向左入内存栈
   2.出栈操作（栈平衡）由被调用参数完成
 */
+#include "linkage.h"
 
 .section .text		//伪指令.section定义段名为.text（代码段）
-.globl _start		//GAS编译器使用标识符_start作为默认起始位置；还要使用.globl修饰，若缺少则链接过程中会出现警告
-_start:
+//.globl _start		//GAS编译器使用标识符_start作为默认起始位置；还要使用.globl修饰，若缺少则链接过程中会出现警告
+//_start:
+//在linkage.h中有宏定义Entry(_start)的效果等同于.globl _start和_start:两条语句
+Entry(_start)
 	mov $0x10,%ax	//GAS汇编指令源操作数在左边，目的操作数在右边
 	mov %ax,%ds
 	mov %ax,%es
@@ -56,10 +59,12 @@ entry64:
 	movq %rax,%es
 	movq %rax,%gs
 	movq %rax,%ss					//DS=ES=FS=SS=RAX
-	movq $0xFFFF800000007E00,%rsp	//栈指针rsp=0xFFFF800000007E00
+	//movq $0xFFFF800000007E00,%rsp	//栈指针rsp=0xFFFF800000007E00
+	movq _stack_start(%rip),%rsp	//栈指针RSP=基地址RIP+偏移地址_stack_start=第一个进程的内核层栈基地址
 //负责初始化中断描述符表IDT内部的每个中断描述符（共256项，每项占16Bytes）
 setup_IDT:
-	/*leaq source, destination：在逆向工程和优化代码中非常常见
+	/*
+	  leaq source, destination：在逆向工程和优化代码中常见
 	  1.source：必须是一个内存操作数（Memory Operand）。但与大多数指令不同，leaq不会读取内存中的值，而是计算出这个内存地址本身
 	  2.destination：必须是一个通用寄存器（如%rax、%rbx、%rcx、%rdx、%rsi、%rdi、%rbp、%rsp、%r8-%r15等）
 	  3.计算有效地址的公式是：Effective Address=base+index*scale+offset
@@ -121,13 +126,14 @@ setup_TSS64:
 	movq go_to_kernel(%rip),%rax	//RAX=基地址RIP+偏移地址go_to_kernel
 	pushq $0x08			//内核代码段选择子
 	pushq %rax			//段内地址偏移
-	lretq
+	lretq				//跳转至main.c中定义的函数Start_Kernel继续执行
 go_to_kernel:
 	.quad Start_Kernel
-/*采用objdump -D system反汇编，而不是kernel.bin，因为只有system文件记录内核程序各个段信息，能显示出每条指令地址及详细信息
+/*
+  采用objdump -D system反汇编，而不是kernel.bin，因为只有system文件记录内核程序各个段信息，能显示出每条指令地址及详细信息
   而kernel.bin只保存程序机器码，不含有任何段描述信息，无法通过该文件查询程序的指令地址
 */
-//整数除0异常/中断处理模块
+//整数除0异常/中断处理模块，只在head.S中使用，详细的内部异常处理程序在trap.h和trap.c
 ignore_int:
 	cld			//清除DF标志位，使DF=0
 	pushq %rax
@@ -188,6 +194,14 @@ Loop:
 //0号异常：除零异常发生时，屏幕出现提示消息
 int_msg:
 	.asciz "Unknown interrupt or fault at RIP\n"
+/*
+  全局变量_stack_start保存的数值与init_thread结构体变量中rsp0成员变量的数值相同，指向系统第一个进程的内核层基地址
+  可让内核头程序直接使用该进程的内核层栈空间，减少栈空间切换的隐患和开销
+
+  union task_union init_task_union：在task.c中定义的全局变量
+*/
+Entry(_stack_start)
+	.quad init_task_union+32768
 //=======创建并初始化各级页表及页表项
 //=======IA-32e模式下有4KB，2MB，1GB大小的物理页，使用2MB以下的物理页会导致页颗粒零碎，从而造成频繁的物理页维护工作
 //=======4KB页面采用PML4，PDP，PD，PT；2MB页面采用PML4，PDP，PD；1G页面采用PML4,PDP
