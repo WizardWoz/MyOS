@@ -1,6 +1,7 @@
-/*  内核主程序（内核主函数），相当于应用程序的主函数，在正常情况下不会返回，内核头程序并没有给内核程序提供返回地址
-    内核头程序head.S通过lretq跳转至此而不是通过call；并且关机、重启等功能也并非在内核主程序返回过程中实现
-    负责调用各系统模块初始化函数，模块初始化结束后会创建出系统第一个进程init，并将控制权交给init
+/*
+  内核主程序（内核主函数），相当于应用程序的主函数，在正常情况下不会返回，内核头程序并没有给内核程序提供返回地址
+  内核头程序head.S通过lretq跳转至此而不是通过call；并且关机、重启等功能也并非在内核主程序返回过程中实现
+  负责调用各系统模块初始化函数，模块初始化结束后会创建出系统第一个进程init，并将控制权交给init
 */
 #include "lib.h"
 #include "printk.h"
@@ -11,9 +12,9 @@
 
 /*经过声明后的extern变量（标识符）会被放在kernel.lds链接脚本指定的位置处*/
 extern char _text; // Kernel.lds链接脚本将_text放在线性地址0xFFFF800000100000，使得_text位于内核程序的代码段起始地址
-extern char _etext;
-extern char _edata;
-extern char _end;
+extern char _etext;//内核代码段结束地址
+extern char _edata;//内核数据段结束地址
+extern char _end;  //内核程序结束地址 
 
 /*全局内存管理结构体变量memory_management_struct初始化
   struct e820[32]={0,0,0......,0};

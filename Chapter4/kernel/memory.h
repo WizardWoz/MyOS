@@ -50,6 +50,43 @@
 #define PG_K_Share_To_U (1 << 8)	//PG_K_Share_To_U=256
 #define PG_Slab (1 << 9)			//PG_Slab=512
 
+/*
+  C语言typedef关键字：typedef <已有类型> <新的别名>;
+  用于为已有的数据类型创建一个别名。它本身并不创建一个新的数据类型，而是为现有的类型提供一个更容易理解或更方便使用的名称。提高代码的可读性和可维护性。
+  1.简化复杂类声明，例如结构体（struct）、联合体（union）、数组、指针或函数指针。
+  // 不使用 typedef                      // 使用 typedef			struct _Point { // 通常会用一个不同的名字来区分
+  struct Point {						typedef struct {				int x;
+      int x;								int x;						int y;
+      int y;								int y;				    };
+  };									} Point;					typedef struct _Point Point;
+  // 每次声明变量都需要写 struct Point	  // 声明变量更简洁			   Point p3;
+  struct Point p1;						Point p2;
+
+  typedef int* IntPtr; // IntPtr 是 'int*' 的别名	typedef char* String; // String 是 'char*' 的别名，常用于表示字符串
+  IntPtr ptr1, ptr2;   // 声明了两个整型指针		String name = "你好";
+
+  // 不使用typedef声明一个函数指针变量			   typedef void (*MathOperationFunc)(int, int);
+  void (*math_operation_func_ptr)(int, int);	MathOperationFunc add_func, subtract_func; // 声明函数指针变量清晰得多
+
+  2.提高代码可读性和可维护性
+  为类型使用有意义的别名可以使代码一目了然。如果以后需要更改底层类型只需要修改typedef的定义，而不需要在代码中每个使用该类型的地方都进行修改
+  typedef int Age;		Age personAge = 30;
+
+  3.增强代码可移植性
+  数据类型在不同的平台或编译器上可能有不同的大小或表示方式。你可以使用typedef来定义通用的类型名称，然后根据具体的平台调整它们的实际定义，从而使代码更具可移植性。
+  // 在特定平台的头文件中
+  typedef long int int32_platform; // 假设在这个平台上 long int 是 32 位
+  // 在你的代码中
+  int32_platform counter;
+
+  4.与#define的区别
+  #define：预处理器指令，它在预处理阶段执行简单的文本替换，可能会导致意外行为，尤其是在处理指针类型
+  通常具有文件作用域（从定义点开始到文件结束，或直到遇到#undef）
+
+  typedef：编译阶段由编译器处理，进行类型解释；创建一个真正的类型别名，编译器会进行类型检查；允许在一条语句中声明多个相同别名的变量；
+  遵循C语言的作用域规则（可以是全局的，也可以是块/函数局部的）
+*/
+
 typedef struct
 {
 	unsigned long pml4t;

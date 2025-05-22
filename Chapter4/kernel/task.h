@@ -17,6 +17,17 @@
 
 #define PF_KTHREAD (1<<0)           //进程标志：内核级线程=1
 
+extern char _text;		// Kernel.lds链接脚本将_text放在线性地址0xFFFF800000100000，使得_text位于内核程序的代码段起始地址
+extern char _etext;		//进程代码段结束地址
+extern char _data;		//进程数据段起始地址
+extern char _edata;		//进程数据段结束地址
+extern char _rodata;	//进程只读数据段起始地址
+extern char _erodata;	//进程只读数据段结束地址
+extern char _bss;		//进程.bss段起始地址
+extern char _ebss;		//进程.bss段结束地址
+extern char _end;		//进程程序结束地址
+extern unsigned long _stack_start;	//进程栈起始地址
+
 /*
   内存空间分布结构体：描述进程的页表结构和各程序段信息（页目录基地址、代码段、数据段、只读数据段、应用层栈地址等）
 */
@@ -70,7 +81,7 @@ struct task_struct
 {
     struct List list;       //双向链表，连接各进程控制结构体（进程控制块PCB）
     volatile long state;    //进程状态：就绪态、运行态、阻塞态、可中断态等等
-    unsigned long flags;    //进程标志：进程、线程、内核线程
+    unsigned long flags;    //进程标志：进程、用户级线程、内核级线程
     struct mm_struct *mm;   //内存空间分布结构体，记录内存页表和程序段信息
     struct thread_struct *thread;   //进程切换时保留的状态信息（执行现场的寄存器值）
     //进程地址空间范围：0x0000 0000 0000 0000~0x0000 7FFFF FFFF FFFF是应用层；0xFFFF 8000 0000 0000~0xFFFF FFFF FFFF FFFF是内核层
@@ -142,7 +153,8 @@ union task_union init_task_union __attribute__((__section__(".data.init_task")))
   目前只有数组的第0个元素投入使用，剩余成员将在多核处理器初始化后予以创建
 */
 struct task_struct *init_task[NR_CPUS]={&init_task_union.task,0};
-struct mm_struct init_mm={0};
+struct mm_struct init_mm={0};		//全局struct mm_struct内存空间分布结构体（task.h中初始化为0）
+//全局struct thread_struct保存进程运行现场结构体
 struct thread_struct init_thread=
 {
 	//内核栈基地址（位于任务状态段TSS）=全局变量init_task_union的stack数组变量首地址+4096
@@ -203,8 +215,11 @@ struct tss_struct
 	.iomapbaseaddr=0				\
 }
 
-//使用了GNU C的一个扩展功能，称为“指定初始化范围”（Designated Initializer Range）或“范围指定符”（Range Designator）。
-//[first ... last]=value这种语法表示将数组中从索引first到索引last（包含first和 last）的所有元素都初始化为value。
+/*
+  使用了GNU C的一个扩展功能，称为“指定初始化范围”（Designated Initializer Range）或“范围指定符”（Range Designator）。
+  [first ... last]=value这种语法表示将数组中从索引first到索引last（包含first和last）的所有元素都初始化为value。
+  将struct tss_struct 结构体数组的每个TSS结构体成员都使用INIT_TSS宏函数初始化
+*/
 struct tss_struct init_tss[NR_CPUS]={[0 ... NR_CPUS-1] =INIT_TSS};
 
 /*
@@ -238,5 +253,53 @@ inline struct task_struct *get_current()
 #define GET_CURRENT				\
 	"movq %rsp,%rbx \n\t"		\
 	"andq $-32768,%rbx \n\t"	\
+
+/*
+  宏函数：进程切换过程
+  参数：
+  1.prev：指向当前执行的原进程的进程控制结构体（进程控制块PCB）struct task_struct prev的指针
+  2.next：指向准备切换的目的进程的进程控制结构体（进程控制块PCB）struct task_struct next的指针
+  应用程序进入内核层时已经将进程的执行现场（所有通用寄存器值）保存，所以进程切换过程并不涉及保存/还原通用寄存器，
+  只需保存/还原RIP、RSP寄存器
+
+  指令部分：
+  pushq %%rbp		//将当前进程的栈基地址RBP入栈
+  pushq %%rax		//将RAX入栈，因为后续指令暂时会使用RAX
+  movq %%rsp,%0		//prev指针指向的struct task_struct进程控制结构体的栈指针存放到当前进程栈空间%0=prev->thread->rsp
+  movq %2,%%rsp		//栈指针RSP替换成准备切换到的目的进程的栈指针%2=next->thread->rsp
+  leaq 1f(%%rip),%%rax	//跳转地址RAX=基地址RIP+偏移地址1f（向后寻找标号为1的指令）
+  movq %%rax,%1		//跳转地址RAX存放到%1=prev->thread->rip
+  pushq %3			//将目的进程的指令指针寄存器%3=next->thread->rip入栈
+  jmp __switch_to	//跳转至C语言函数__switch_to处继续执行，完成进程切换后续工作
+  1:
+  popq %%rax		//从__switch_to返回，弹出进程切换前准备工作压入栈的RAX
+  popq %%rbp		//从__switch_to返回，弹出进程切换前准备工作压入栈的RBP
+  输出部分：相关指令执行后，将结果暂存至内存栈区，并转移到prev->thread->rsp、prev->thread->rip变量
+  输入部分：所有指令执行前，使用next->thread->rsp、next->thread->rip初始化内存栈区；
+  使用prev、next指针初始化RDI、RSI（遵循cdecl调用约定调用C语言函数__switch_to）
+  损坏描述：指令执行可能影响到相关内存区域，使用memory声明
+*/
+#define switch_to(prev,next)        \
+do									\
+{									\
+	__asm__ __volatile__(			\
+		"pushq %%rbp \n\t"			\
+		"pushq %%rax \n\t"			\
+		"movq %%rsp,%0 \n\t"		\
+		"movq %2,%%rsp \n\t"		\
+		"leaq 1f(%%rip),%%rax \n\t"	\
+		"movq %%rax,%1"				\
+		"pushq %3"					\
+		"jmp __switch_to \n\t"		\
+		"1: \n\t"					\
+		"popq %%rax \n\t"			\
+		"popq %%rbp \n\t"			\
+		:"=m"(prev->thread->rsp),"=m"(prev->thread->rip)					\
+		:"m"(next->thread->rsp),"m"(next->thread->rip),"D"(prev),"S"(next)	\
+		:"memory"					\
+	);								\
+} while (0)
+
+void task_init();
 
 #endif
