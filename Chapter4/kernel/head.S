@@ -21,8 +21,8 @@
 .section .text		//伪指令.section定义段名为.text（代码段）
 //.globl _start		//GAS编译器使用标识符_start作为默认起始位置；还要使用.globl修饰，若缺少则链接过程中会出现警告
 //_start:
-//在linkage.h中有宏定义Entry(_start)的效果等同于.globl _start和_start:两条语句
-Entry(_start)
+//在linkage.h中有宏定义ENTRY(_start)的效果等同于.globl _start和_start:两条语句
+ENTRY(_start)
 	mov $0x10,%ax	//GAS汇编指令源操作数在左边，目的操作数在右边
 	mov %ax,%ds
 	mov %ax,%es
@@ -198,9 +198,9 @@ int_msg:
   全局变量_stack_start保存的数值与init_thread结构体变量中rsp0成员变量的数值相同，指向系统第一个进程的内核层基地址
   可让内核头程序直接使用该进程的内核层栈空间，减少栈空间切换的隐患和开销
 
-  union task_union init_task_union：在task.c中定义的全局变量
+  union task_union init_task_union：在task.h中定义的全局变量，一共使用32KB存储空间，init_task_union+32768才能指向内核层基地址
 */
-Entry(_stack_start)
+ENTRY(_stack_start)
 	.quad init_task_union+32768
 //=======创建并初始化各级页表及页表项
 //=======IA-32e模式下有4KB，2MB，1GB大小的物理页，使用2MB以下的物理页会导致页颗粒零碎，从而造成频繁的物理页维护工作
