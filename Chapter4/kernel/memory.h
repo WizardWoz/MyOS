@@ -39,16 +39,16 @@
 #define ZONE_UNMAPPED (1 << 2)	// ZONE_UNMAPPED=4
 
 // struct Page物理页的属性（alloc_pages函数的unsigned long page_flags参数）
-#define PG_PTable_Mapped (1 << 0)	//PG_PTable_Mapped=1
-#define PG_Kernel_Init (1 << 1)		//PG_Kernel_Init=2
-#define PG_Referenced (1 << 2)		//PG_Referenced=4
-#define PG_Dirty (1 << 3)			//PG_Dirty=8
-#define PG_Active (1 << 4)			//PG_Active=16
-#define PG_Up_To_Date (1 << 5)		//PG_Up_To_Date=32
-#define PG_Device (1 << 6)			//PG_Device=64
-#define PG_Kernel (1 << 7)			//PG_Kernel=128
-#define PG_K_Share_To_U (1 << 8)	//PG_K_Share_To_U=256
-#define PG_Slab (1 << 9)			//PG_Slab=512
+#define PG_PTable_Mapped (1 << 0)	//已映射物理页，PG_PTable_Mapped=1
+#define PG_Kernel_Init (1 << 1)		//内核初始化，PG_Kernel_Init=2
+#define PG_Referenced (1 << 2)		//被引用物理页，PG_Referenced=4
+#define PG_Dirty (1 << 3)			//有脏数据的物理页，PG_Dirty=8
+#define PG_Active (1 << 4)			//活跃的物理页，PG_Active=16
+#define PG_Up_To_Date (1 << 5)		//已更新物理页，PG_Up_To_Date=32
+#define PG_Device (1 << 6)			//外设备使用，PG_Device=64
+#define PG_Kernel (1 << 7)			//内核层独享，PG_Kernel=128
+#define PG_K_Share_To_U (1 << 8)	//内核层与用户层共享，PG_K_Share_To_U=256
+#define PG_Slab (1 << 9)			//SLAB内存池使用，PG_Slab=512
 
 /*
   C语言typedef关键字：typedef <已有类型> <新的别名>;

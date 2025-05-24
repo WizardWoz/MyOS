@@ -11,9 +11,9 @@ SECTIONS
 	  内核程序（即head.o）的起始线性地址0xffff800000000000+0x100000处
 	*/
 	. = 0xffff800000000000 + 0x100000;
-	.text :
+	.text :				/*.text和:之间必须用" "隔开*/
 	{
-		_text = .;
+		_text = .;		/*_text和=和.之间必须用" "隔开*/
 		*(.text)
 		_etext = .;
 	}
@@ -24,11 +24,11 @@ SECTIONS
 		*(.data)
 		_edata = .;
 	}
-	.rodata:
+	.rodata :
 	{
-		_rodata=.;
+		_rodata = .;
 		*(.rodata)
-		_erodata=.;
+		_erodata = .;
 	}
 	/*
 	  .data.init_task段（在task.h中定义）被放置在只读数据段.rodata段之后，并按照32KB对齐，采用32KB对齐而非8B对齐，是因为除init_task_union之外
@@ -36,7 +36,7 @@ SECTIONS
 	  如果按8B对齐，今后使用宏current和宏函数GET_CURRENT的过程中难免会存在隐患
 	*/
 	.=ALIGN(32768);
-	.data.init_task:
+	.data.init_task :
 	{
 		*(.data.init_task)
 	}

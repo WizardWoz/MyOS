@@ -8,7 +8,32 @@
 #define NULL 0
 
 /*
-  
+  C语言typeof编译器拓展，并非标准C语言的一部分。它最先由GNU C编译器（GCC）引入，后来也被Clang等其他一些编译器支持
+  使用 typeof 可能会降低代码的可移植性，因为不保证所有C编译器都支持它
+  typeof 允许你在编译时获取一个变量或表达式的类型，而无需显式地写出这个类型。这在以下几种情况下特别有用：
+  1.声明与现有变量类型相同的变量
+  int x = 10;									double arr[5];
+  typeof(x) y; // y 的类型与 x 相同，即 int		  typeof(arr[0]) element; // element 的类型是 double
+  y = 20;
+  2.创建类型安全的宏（最强大的用途）：在宏定义中，你可能不知道传递给宏的参数的具体类型，但又需要声明一个与参数类型相同的临时变量
+  #define MAX(a, b) \					// 潜在问题：如果不用 typeof，宏可能会多次评估参数
+   ({ typeof (a) _a = (a); \			// 例如 #define MAX_BAD(a,b) ((a) > (b) ? (a) : (b))
+      typeof (b) _b = (b); \			// MAX_BAD(i++, j++) 就会导致 i 或 j 被多次自增
+      _a > _b ? _a : _b; })
+  3.简化复杂类型的声明：当处理嵌套结构体、指针或函数指针等复杂类型时，typeof 可以使代码更简洁
+  struct MyStruct s1;				int (*func_ptr)(int, int);
+  typeof(s1) s2 = s1;				typeof(func_ptr) another_func_ptr; // another_func_ptr 的类型是 int (*)(int, int)
+*/
+
+/*
+  宏函数：根据结构体变量中某成员变量基地址，算出结构体变量基地址（即反推导出父层结构的起始地址）
+  参数：
+  1.ptr：结构体内某个成员变量的基地址
+  2.type：成员变量所在结构体
+  3.member：成员变量名称
+
+  typeof(((type *)0)->member) * p = (ptr)：首先计算出成员变量member在type结构体内的偏移
+  (type *)((unsigned long)p - (unsigned long)&(((type *)0)->member));：根据ptr参数计算出结构体变量的起始地址
 */
 #define container_of(ptr,type,member)							\
 ({											\
@@ -78,7 +103,7 @@ struct List
   函数：不带头结点的双向链表初始化
   参数：
   1.struct List* list：双向链表初始结点
-  返回值：void
+  返回值：void，无
 */
 inline void list_init(struct List * list)
 {
@@ -599,10 +624,11 @@ inline unsigned char io_in8(unsigned short port)
 	//inb：从指定的端口port（DX）读入1B数据到AL
 	__asm__ __volatile__(	"inb	%%dx,	%0	\n\t"
 	//mfence：Memory Fence（内存栅栏）用于强制内存操作的顺序性
-	//lfence (Load Fence): 只保证在 lfence 之前的加载操作在之后的加载操作之前完成。不保证存储操作的顺序。
-	//sfence (Store Fence): 只保证在 sfence 之前的存储操作在之后的存储操作之前完成。不保证加载操作的顺序。
-	//mfence (Memory Fence): 保证在 mfence 之前的所有加载和存储操作在之后的所有加载和存储操作之前完成。它是 lfence 和 sfence 功能的集合
-	//主要用于需要严格控制内存访问顺序的底层代码，包括：多线程库和同步原语的实现（如互斥锁、读写锁、条件变量）；无锁数据结构（Lock-Free Data Structures）的实现。设备驱动程序中与内存映射 I/O 端口的交互。
+	//lfence(Load Fence)：只保证在lfence之前的加载操作在之后的加载操作之前完成。不保证存储操作的顺序。
+	//sfence(Store Fence)：只保证在sfence之前的存储操作在之后的存储操作之前完成。不保证加载操作的顺序。
+	//mfence(Memory Fence)：保证在mfence之前的所有加载和存储操作在之后的所有加载和存储操作之前完成。它是lfence和sfence功能的集合
+	//主要用于需要严格控制内存访问顺序的底层代码，包括：多线程库和同步原语的实现（如互斥锁、读写锁、条件变量）；
+	//无锁数据结构（Lock-Free Data Structures）的实现。设备驱动程序中与内存映射I/O端口的交互。
 				"mfence			\n\t"
 	//输出部分：相关指令执行后，将结果存入AL，并将AL存入unsigned char ret
 				:"=a"(ret)
