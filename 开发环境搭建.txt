@@ -4,6 +4,7 @@
 3./home		LVM		5GB				文件系统xfs
 4.swap		LVM		1GB				文件系统swap
 5./boot		标准分区		1GB				文件系统xfs 	
+
 一、安装依赖软件包
 1.yum install gtk2 gtk2-devel
 2.yum install libXt libXt-devel
@@ -13,10 +14,12 @@
 6.yum install xorg-x11-server-devel
 7.yum install gcc
 8.yum install gcc-c++
+
 二、下载bochs-2.6.8并解压
 1.wget https://sourceforge.net/projects/bochs/files/bochs/2.6.8/bochs-2.6.8.tar.gz
 2.mv bochs-2.6.8.tar.gz /home/george/下载/
 3.tar -zxvf bochs-2.6.8.tar.gz  -C /usr/local
+
 三、基于源码编译bochs-2.6.8
 1.cd /usr/local/bochs-2.6.8
 2.通过./configure建立Makefile文件：./configure --with-x11 --with-wx --enable-debugger --enable-disasm --enable-all-optimizations --enable-readline --enable-long-phy-address --enable-ltdl-install --enable-idle-hack --enable-plugins --enable-a20-pin --enable-x86-64 --enable-smp --enable-cpu-level=6 --enable-large-ramfile --enable-repeat-speedups --enable-fast-function-calls --enable-handlers-chaining --enable-trace-linking --enable-configurable-msrs --enable-show-ips --enable-cpp --enable-debugger-gui --enable-iodebug --enable-logging --enable-assert-checks --enable-fpu --enable-vmx=2 --enable-svm --enable-3dnow --enable-alignment-check --enable-monitor-mwait --enable-avx --enable-evex --enable-x86-debugger --enable-pci --enable-usb --enable-voodoo
@@ -29,6 +32,7 @@ cp iodev/hdimage/vbox.cpp iodev/hdimage/vbox.cc
 4.make clean
 make
 make install
+
 四、配置bochs运行环境
 1.（文件名前有 . 为隐藏文件，要用ls -al才能看见）备份.bochsrc配置文件cp .bochsrc .bochsrc.backup
 2.修改.bochsrc，删除文件里原有内容，复制粘贴以下内容
@@ -85,6 +89,7 @@ com3:enabled=0
 com4:enabled=0
 
 megs:2048
+
 五、下载并安装NASM
 1.cd /home/george/下载
 wget https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/nasm-2.16.03.tar.gz
@@ -104,6 +109,7 @@ Terminal=true
 Type=Application
 Categories=Application
 Name[zh_CN]=nasm
+
 六、下载并安装Visual Studio Code v1.81版，并设置系统字体和VSCode字体
 1.前往https://code.visualstudio.com/updates/v1_81下载.rpm包
 2.进入存放.rpm包的目录，使用yum install xxx.rpm安装
@@ -119,6 +125,7 @@ Name[zh_CN]=nasm
     "terminal.integrated.fontSize": 19,
     "debug.console.fontSize": 19
 }
+
 七、建立boot.img并存放boot.bin；loader.bin；kernel.bin等可执行文件......
 dd if=boot.bin of=boot.img bs=512 count=2880    #此时已经相当于将boot.img格式化成文件系统是FAT12的1.44MB软盘了
 sudo mount -t vfat -o loop boot.img /media/
@@ -127,6 +134,7 @@ sudo cp kernel.bin /media/
 sudo sync
 sudo umount /media/
 bochs -f ./.bochsrc     #以第四步修改后的.bochsrc文件为默认配置文件启动bochs
+
 八、一些调试技巧（包括常用bochs的debug命令；system内核可执行文件的调试；boot.bin和loader.bin的调试）
 1.b 0x7C00：在地址0x7C00处打断点
 2.c (0x7C00)：一直执行直到遇到死循环或执行完毕当前程序（或者执行到地址为0x7C00的代码语句处）
@@ -139,6 +147,7 @@ bochs -f ./.bochsrc     #以第四步修改后的.bochsrc文件为默认配置�
 9.调试boot.bin和loader.bin，一般是通过在代码中插入死循环语句jmp $
 10.调试system内核（不要调试kernel.bin，详细原因在head.S），用objdump -D system得到各个函数的入口地址；例如Start_Kernel：0x000000104771；color_printk：0x000000105AEC
    在调用函数的call指令处打断点，在函数出口的ret指令处打断点，之后执行<bochs: > c命令，在此期间通过各种命令查看寄存器和内存
+
 九、Git和GitHub的一些使用技巧
 1.安装git通常使用yum install命令或者直接下载rpm包
 2.首次配置Git
@@ -280,3 +289,24 @@ vendor/
 即使把它添加到.gitignore中，Git仍然会继续追踪它。要停止追踪一个已经被追踪的文件并将其忽略，你需要先从Git索引中移除它，然后再提交：
 git rm --cached <文件名>
 git commit -m "Stop tracking <文件名>"
+
+十、GitHub发布Releases
+1.选择或创建标签（Tag）
+(1)创建新标签 (Create new tag): 在输入框中输入您的版本号 (例如：v1.0.0, v2.1.3-beta)。强烈建议遵循语义化版本控制 (Semantic Versioning) 规范 (例如 主版本号.次版本号.修订号)。
+输入后，点击 "Create new tag: [您的标签名] on publish" (发布时创建新标签: [您的标签名])。
+(2)选择现有标签 (Choose an existing tag): 如果您已经通过 Git 命令行创建并推送了标签，您可以从下拉列表中选择一个现有的标签。
+2.填写Release标题和描述
+(1)Release title (发行版标题): 给您的 Release 起一个简洁明了的标题。通常，这会与您的标签名相同或类似 (例如："Version 1.0.0" 或 "My Awesome App v1.0.0")。
+(2)Describe this release (描述此发行版): 这是非常重要的一部分。在这里，您应该提供该版本的详细更新日志 (Changelog)。这可以包括：
+新增功能 (New features)、错误修复 (Bug fixes)、性能改进 (Performance improvements)、重大变更 (Breaking changes)，请务必突出显示！、贡献者 (如果您想感谢特定的贡献者，可以在这里 @他们)
+(3)Generate release notes (自动生成发行说明): GitHub 提供了一个方便的功能，可以根据自上次 Release 以来的提交和拉取请求 (Pull Requests) 自动生成发行说明。
+您可以点击此按钮生成一个初稿，然后根据需要进行编辑和完善。
+3.上传二进制文件 (可选但推荐)
+Attach binaries by dropping them here or selecting them 拖拽或选择文件以上传二进制附件：如果您的项目会生成可执行文件、安装包、压缩档案或其他用户可以直接下载使用的文件，您应该将它们附加到 Release 中。
+直接将文件拖拽到虚线框内，或点击链接选择文件进行上传。
+常见的二进制文件包括：
+Windows 安装程序 (.exe, .msi)
+macOS 应用 (.dmg, .app.zip)
+Linux 包 (.deb, .rpm, .tar.gz)
+移动应用包 (.apk, .ipa)
+压缩的源代码 (.zip, .tar.gz) - 虽然 Git 标签本身就包含了源代码快照，但有时提供一个方便下载的压缩包也是有用的。
