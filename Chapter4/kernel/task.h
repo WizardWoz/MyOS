@@ -4,9 +4,13 @@
 #include "lib.h"
 #include "memory.h"
 #include "cpu.h"
+#include "ptrace.h"
 
-#define KERNEL_CS 0x08
-#define KERNEL_DS 0x10
+#define KERNEL_CS 0x08			//内核程序段选择子
+#define KERNEL_DS 0x10			//内核数据段选择子
+#define CLONE_FS (1<<0)			//标志位：克隆
+#define CLONE_FILES (1<<1)		//标志位：克隆
+#define CLONE_SIGNAL (1<<2)		//标志位：克隆信号量=4
 #define STACK_SIZE 32768            //表示进程的内核栈空间和struct task_struct结构体占用存储空间总量为32768B（32KB）
 
 #define TASK_RUNNING (1<<0)         //进程运行态=1
@@ -26,7 +30,8 @@ extern char _erodata;	//进程只读数据段结束地址
 extern char _bss;		//进程.bss段起始地址
 extern char _ebss;		//进程.bss段结束地址
 extern char _end;		//进程程序结束地址
-extern unsigned long _stack_start;	//进程栈起始地址
+extern unsigned long _stack_start;	//进程栈起始地址，在head.S中作为汇编语句的标号入口Entry(_stack_start)
+extern void ret_from_intr();	//从外部中断返回，在entry.S中作为汇编语句的标号入口Entry(ret_from_intr)
 
 /*
   内存空间分布结构体：描述进程的页表结构和各程序段信息（页目录基地址、代码段、数据段、只读数据段、应用层栈地址等）
@@ -108,8 +113,8 @@ union task_union
     unsigned long stack[STACK_SIZE/sizeof(unsigned long)];
 }__attribute__((aligned(8)));
 
-struct mm_struct init_mm;
-struct thread_struct init_thread;
+struct mm_struct init_mm;	//全局变量，新进程内存空间分布结构体
+struct thread_struct init_thread;	//全局变量，新进程执行现场的寄存器值
 
 /*
   宏函数：INIT_TASK，将union task_union实例化成全局变量init_task_union，并将其作为操作系统的第一个进程
@@ -223,9 +228,9 @@ struct tss_struct
 struct tss_struct init_tss[NR_CPUS]={[0 ... NR_CPUS-1] =INIT_TSS};
 
 /*
-  函数：借鉴Linux源码，用于获得当前struct task_struct结构体（借助Kernel.lds的32KB对齐技巧）
+  函数：借鉴Linux源码，用于获得当前进程的struct task_struct结构体（借助Kernel.lds的32KB对齐技巧）
   参数：无
-  返回值：struct task_struct *，指向当前struct task_struct结构体的指针
+  返回值：struct task_struct *，指向当前进程的struct task_struct结构体的指针
 
   指令部分：
   andq %%rsp,%0	//将栈指针寄存器RSP与0xFFFF FFFF FFFF 8000进行逻辑与，结果是当前进程struct task_struct结构体的基地址
@@ -270,10 +275,12 @@ inline struct task_struct *get_current()
   leaq 1f(%%rip),%%rax	//跳转地址RAX=基地址RIP+偏移地址1f（向后寻找标号为1的指令）
   movq %%rax,%1		//跳转地址RAX存放到%1=prev->thread->rip
   pushq %3			//将目的进程的指令指针寄存器%3=next->thread->rip入栈
-  jmp __switch_to	//跳转至C语言函数__switch_to处继续执行，完成进程切换后续工作
+  //使用cdecl函数调用约定：RDI、RSI分别保存宏参数prev和next代表的进程控制结构体，跳转至C语言函数__switch_to处继续执行，完成进程切换后续工作
+  jmp __switch_to
   1:
   popq %%rax		//从__switch_to返回，弹出进程切换前准备工作压入栈的RAX
   popq %%rbp		//从__switch_to返回，弹出进程切换前准备工作压入栈的RBP
+
   输出部分：相关指令执行后，将结果暂存至内存栈区，并转移到prev->thread->rsp、prev->thread->rip变量
   输入部分：所有指令执行前，使用next->thread->rsp、next->thread->rip初始化内存栈区；
   使用prev、next指针初始化RDI、RSI（遵循cdecl调用约定调用C语言函数__switch_to）
@@ -288,8 +295,8 @@ do									\
 		"movq %%rsp,%0 \n\t"		\
 		"movq %2,%%rsp \n\t"		\
 		"leaq 1f(%%rip),%%rax \n\t"	\
-		"movq %%rax,%1"				\
-		"pushq %3"					\
+		"movq %%rax,%1 \n\t"		\
+		"pushq %3 \n\t"				\
 		"jmp __switch_to \n\t"		\
 		"1: \n\t"					\
 		"popq %%rax \n\t"			\

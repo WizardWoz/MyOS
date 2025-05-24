@@ -9,12 +9,13 @@
 #include "trap.h"
 #include "interrupt.h"
 #include "memory.h"
+#include "task.h"
 
-/*经过声明后的extern变量（标识符）会被放在kernel.lds链接脚本指定的位置处*/
-extern char _text; // Kernel.lds链接脚本将_text放在线性地址0xFFFF800000100000，使得_text位于内核程序的代码段起始地址
-extern char _etext;//内核代码段结束地址
-extern char _edata;//内核数据段结束地址
-extern char _end;  //内核程序结束地址 
+/*经过声明后的extern变量（标识符）会被放在kernel.lds链接脚本指定的位置处（4.8进程管理已经将其放到task.h中）*/
+// extern char _text; // Kernel.lds链接脚本将_text放在线性地址0xFFFF800000100000，使得_text位于内核程序的代码段起始地址
+// extern char _etext;//内核代码段结束地址
+// extern char _edata;//内核数据段结束地址
+// extern char _end;  //内核程序结束地址 
 
 /*全局内存管理结构体变量memory_management_struct初始化
   struct e820[32]={0,0,0......,0};
@@ -113,6 +114,9 @@ void Start_Kernel(void)
 
     color_printk(RED,BLACK,"interrupt init\n");
     init_interrupt();
+
+    color_printk(RED,BLACK,"task init\n");
+    task_init();
 
     while (1)
     {
