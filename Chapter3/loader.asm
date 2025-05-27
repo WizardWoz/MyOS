@@ -26,6 +26,18 @@ GdtPtr dw GdtLen-1          ;dw会向dd对齐（因为已经进入32位模式）
 ;SelectorCode32、SelectorData32是两个LDT段选择子，是程序局部段描述符在GDT表中的索引号
 SelectorCode32 equ LABEL_DESC_CODE32-LABEL_GDT
 SelectorData32 equ LABEL_DESC_DATA32-LABEL_GDT
+
+;=======SECTION伪指令追加定义一个名为gdt64的段，实际上创建了一个IA-32e 64位长模式的临时GDT表
+;=======简化了保护模式的段结构，删减掉冗余的段基地址和段限长，使段直接覆盖整个线性空间，变为平坦地址空间
+[SECTION gdt64]
+LABEL_GDT64: dq	0x0000000000000000
+LABEL_DESC_CODE64: dq 0x0020980000000000
+LABEL_DESC_DATA64: dq 0x0000920000000000
+GdtLen64 equ $-LABEL_GDT64
+GdtPtr64 dw GdtLen64-1
+         dd	LABEL_GDT64
+SelectorCode64 equ LABEL_DESC_CODE64-LABEL_GDT64
+SelectorData64 equ LABEL_DESC_DATA64-LABEL_GDT64
     
 [SECTION .s16]      ;SECTION伪指令追加定义一个名为.s16的段
 [BITS 16]           ;BITS伪指令通知NASM编译器应为16位宽的处理器生成代码
@@ -217,7 +229,231 @@ Label_File_Loaded:
     mov ah,0FH                  ;AH=字符颜色属性；0000：黑底、1111：白字
     mov al,'G'                  ;AL=要显示的字符'G'
     mov [gs:((80*0+39)*2)],ax   ;在屏幕第0行，第39列显示
-    jmp $                       ;调试用，屏幕显示P61 图3-8 在屏幕上显示字符'G'
+    ;jmp $                       ;调试用，屏幕显示P61 图3-8 在屏幕上显示字符'G'
+;=======Loader加载完Kernel后软盘驱动器不再使用，以下子程序关闭软驱马达
+KillMotor:
+    push dx
+    mov dx,03F2H    ;通过向I/O端口0x3F2写入控制命令实现
+    ;第0、1位：00～11选择软盘驱动器A～D；第2位：0复位软盘驱动器，1允许软盘驱动器发送控制信息；第3位：0禁止DMA和中断请求，1允许DMA和中断请求
+    ;第4～7位：控制软驱A～D的马达，1为启动，0为关闭
+    mov al,0
+    out dx,al       ;out指令的源操作数根据端口位宽选用AL，AX，EAX；目的操作数可以是立即数或DX寄存器
+    pop dx
+;=======int 10h子功能AH=13h：显示一行字符串
+    ;AL控制写入模式；AL=00h字符串属性由BL提供，光标位置不变；AL=01h字符串属性由BL提供，光标移动到字符串末端；
+    ;AL=02h字符串属性由每个字符后的单个字节提供，光标位置不变
+    mov ax,1301h
+    ;BH=页码，BL=字符属性，显存物理空间为0xB8000~0xBFFFF
+    ;bit0～2为字体颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit3为字体亮度：0：字体正常亮度、1：字体高亮度
+    ;bit4～6为背景颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit7为字体闪烁：0：不闪烁、1：字体闪烁
+    mov bx,000fh
+    mov dx,0400h       ;DH=游标坐标列号，DL=游标坐标行号
+    mov cx,24          ;CX=字符串长度；若AL=00h则长度以Byte为单位，若AL=02h则长度以Word为单位
+    push ax
+    mov ax,ds
+    mov es,ax          ;ES:BP=要显示的字符串的内存地址
+    pop ax
+    mov bp,StartGetMemStructMessage ;BP=StartGetMemStructMessage
+    int 10h
+    mov ebx,0          ;EBX=0，调用int 15h前BX=0
+    mov ax,0x00
+    mov es,ax          ;ES=AX=0x0000
+    mov di,MemoryStructBufferAddr   ;ES:DI=0x07E00
+;=======获取物理地址空间信息（由一个结构体数组构成，包括可用物理内存地址空间、设备寄存器地址空间、内存空洞）
+Label_Get_Mem_Struct:
+    ;int 15h子功能号AH=E8H：获取物理地址空间信息，并将其保存在ES:DI=0x07E00地址处
+    mov eax,0x0E820
+    mov ecx,20
+    mov edx,0x534D4150
+    int 15h
+    jc Label_Get_Mem_Struct_Fail    ;int 15h若使得标志寄存器EFLAGS的CF位=1，则获取失败
+    add di,20
+    ;int 15h成功调用后，BX会被BIOS更新为一个非零值，作为下一次调用时获取下一个内存区域描述符的句柄
+    ;当BX返回0时，表示已经遍历完所有的内存区域描述符
+    cmp ebx,0
+    jne Label_Get_Mem_Struct        ;EBX!=0则使得ZF!=0，代表获取物理地址信息失败，重新获取
+    jmp Label_Get_Mem_Struct_OK     ;没有跳转到任何其他子过程，说明获取成功
+;=======获取物理地址空间信息失败
+Label_Get_Mem_Struct_Fail:
+;=======int 10h子功能AH=13h：显示一行字符串
+    ;AL控制写入模式；AL=00h字符串属性由BL提供，光标位置不变；AL=01h字符串属性由BL提供，光标移动到字符串末端；
+    ;AL=02h字符串属性由每个字符后的单个字节提供，光标位置不变
+    mov ax,1301h
+    ;BH=页码，BL=字符属性，显存物理空间为0xB8000~0xBFFFF
+    ;bit0～2为字体颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit3为字体亮度：0：字体正常亮度、1：字体高亮度
+    ;bit4～6为背景颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit7为字体闪烁：0：不闪烁、1：字体闪烁
+    mov bx,008ch
+    mov dx,0500h       ;DH=游标坐标列号，DL=游标坐标行号
+    mov cx,23          ;CX=字符串长度；若AL=00h则长度以Byte为单位，若AL=02h则长度以Word为单位
+    push ax
+    mov ax,ds
+    mov es,ax
+    pop ax
+    mov bp,GetMemStructErrMessage
+    int 10h
+    jmp $
+;=======获取物理地址空间信息成功
+Label_Get_Mem_Struct_OK:
+;=======int 10h子功能AH=13h：显示一行字符串
+    ;AL控制写入模式；AL=00h字符串属性由BL提供，光标位置不变；AL=01h字符串属性由BL提供，光标移动到字符串末端；
+    ;AL=02h字符串属性由每个字符后的单个字节提供，光标位置不变
+    mov ax,1301h
+    ;BH=页码，BL=字符属性，显存物理空间为0xB8000~0xBFFFF
+    ;bit0～2为字体颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit3为字体亮度：0：字体正常亮度、1：字体高亮度
+    ;bit4～6为背景颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit7为字体闪烁：0：不闪烁、1：字体闪烁
+    mov bx,000fh
+    mov dx,0600h       ;DH=游标坐标列号，DL=游标坐标行号
+    mov cx,29          ;CX=字符串长度；若AL=00h则长度以Byte为单位，若AL=02h则长度以Word为单位
+    push ax
+    mov ax,ds
+    mov es,ax
+    pop ax
+    mov bp,GetMemStructOKMessage
+    int 10h
+;=======获取SVGA VBE（VESA BIOS EXTENSION）显示模式
+Label_Get_SVGA_VBE_Info:
+    ;AL控制写入模式；AL=00h字符串属性由BL提供，光标位置不变；AL=01h字符串属性由BL提供，光标移动到字符串末端；
+    ;AL=02h字符串属性由每个字符后的单个字节提供，光标位置不变
+	mov	ax,1301h
+    ;BH=页码，BL=字符属性，显存物理空间为0xB8000~0xBFFFF
+    ;bit0～2为字体颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit3为字体亮度：0：字体正常亮度、1：字体高亮度
+    ;bit4～6为背景颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit7为字体闪烁：0：不闪烁、1：字体闪烁
+	mov	bx,000Fh
+	mov	dx,0800h	    ;DH=游标坐标列号，DL=游标坐标行号
+	mov	cx,23           ;CX=字符串长度；若AL=00h则长度以Byte为单位，若AL=02h则长度以Word为单位
+	push ax
+	mov	ax,ds
+	mov	es,ax
+	pop	ax
+	mov	bp,StartGetSVGAVBEInfoMessage
+	int	10h
+    mov	ax,0x00
+	mov	es,ax           ;ES=AX=0x0000，执行int 10h,AH=4FH子功能需要先设置ES：DI
+	mov	di,0x8000       ;DI=0x8000；所以ES:DI=0x08000指向一个用于存放 VBE 控制器信息块的缓冲区（至少512字节）
+    ;int 10h，AH=4FH，子功能指定要执行VESA BIOS EXTENSION
+    ;AL=00h：获取VBE控制器信息；AL=01h：获取VBE模式信息；AL=02h：设置VBE视频模式；AL=03h：获取当前VBE视频模式。
+    ;AL=04h：保存/恢复VBE状态；AL=05h：屏幕窗口控制；AL=06h：设置逻辑像素格式
+	mov	ax,4F00h
+	int	10h
+    ;int 10h,AH=4FH输出：AX存放VBE状态（AH=00h表示成功，AH=01h表示失败），AL=4FH。
+    ;ES:DI：缓冲区会被填充VBEControllerInfo结构体，包含显卡信息、支持的VBE模式列表等
+	cmp	ax,004Fh
+	jz	Label_Get_SVGA_VBE_Info_OK
+;=======获取SVGA VBE（VESA BIOS EXTENSION）显示模式失败
+Label_Get_SVGA_VBE_Info_Fail:
+    ;AL控制写入模式；AL=00h字符串属性由BL提供，光标位置不变；AL=01h字符串属性由BL提供，光标移动到字符串末端；
+    ;AL=02h字符串属性由每个字符后的单个字节提供，光标位置不变
+    mov	ax,1301h
+    ;BH=页码，BL=字符属性，显存物理空间为0xB8000~0xBFFFF
+    ;bit0～2为字体颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit3为字体亮度：0：字体正常亮度、1：字体高亮度
+    ;bit4～6为背景颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit7为字体闪烁：0：不闪烁、1：字体闪烁
+	mov	bx,008Ch
+	mov	dx,0900h		;DH=游标坐标列号，DL=游标坐标行号
+	mov	cx,23           ;CX=字符串长度；若AL=00h则长度以Byte为单位，若AL=02h则长度以Word为单位
+	push ax
+	mov	ax,ds
+	mov	es,ax
+	pop	ax
+	mov	bp,GetSVGAVBEInfoErrMessage
+	int	10h
+	jmp	$
+;=======获取SVGA VBE（VESA BIOS EXTENSION）显示模式成功
+Label_Get_SVGA_VBE_Info_OK:
+    ;AL控制写入模式；AL=00h字符串属性由BL提供，光标位置不变；AL=01h字符串属性由BL提供，光标移动到字符串末端；
+    ;AL=02h字符串属性由每个字符后的单个字节提供，光标位置不变
+    mov	ax,1301h
+    ;BH=页码，BL=字符属性，显存物理空间为0xB8000~0xBFFFF
+    ;bit0～2为字体颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit3为字体亮度：0：字体正常亮度、1：字体高亮度
+    ;bit4～6为背景颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit7为字体闪烁：0：不闪烁、1：字体闪烁
+	mov	bx,000Fh
+	mov	dx,0A00h		;DH=游标坐标列号，DL=游标坐标行号
+	mov	cx,29           ;CX=字符串长度；若AL=00h则长度以Byte为单位，若AL=02h则长度以Word为单位
+	push ax
+	mov	ax,ds
+	mov	es,ax
+	pop	ax
+	mov	bp,GetSVGAVBEInfoOKMessage
+	int	10h
+;=======提示准备开始获取SVGA VBE Mode属性
+    ;AL控制写入模式；AL=00h字符串属性由BL提供，光标位置不变；AL=01h字符串属性由BL提供，光标移动到字符串末端；
+    ;AL=02h字符串属性由每个字符后的单个字节提供，光标位置不变
+	mov	ax,1301h
+    ;BH=页码，BL=字符属性，显存物理空间为0xB8000~0xBFFFF
+    ;bit0～2为字体颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit3为字体亮度：0：字体正常亮度、1：字体高亮度
+    ;bit4～6为背景颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
+    ;bit7为字体闪烁：0：不闪烁、1：字体闪烁
+	mov	bx,000Fh        
+	mov	dx,0C00h		;DH=游标坐标列号，DL=游标坐标行号
+	mov	cx,24           ;CX=字符串长度；若AL=00h则长度以Byte为单位，若AL=02h则长度以Word为单位
+	push ax
+	mov	ax,ds
+	mov	es,ax
+	pop	ax
+	mov	bp,StartGetSVGAModeInfoMessage
+	int	10h
+	mov	ax,0x00
+	mov	es,ax
+	mov	si,0x800e           ;ES:SI=0x0800E
+	mov	esi,dword [es:si]   ;ESI=(ES:SI)=(0x0800E)
+	mov	edi,0x8200          ;EDI=0x8200
+;=======开始获取SVGA Mode Info
+Label_Get_SVGA_Mode_Info:
+	mov	cx,word [es:esi]
+    push ax
+	mov	ax,00h
+	mov	al,ch
+	call Label_DispAL
+	mov	ax,00h
+	mov	al,cl	
+	call Label_DispAL
+	pop	ax
+	cmp	cx,0FFFFh
+	jz Label_Get_SVGA_Mode_Info_OK
+	mov	ax,4F01h
+	int	10h
+	cmp	ax,004Fh
+	jnz	Label_Get_SVGA_Mode_Info_FAIL
+	add	esi,2
+	add	edi,0x100
+	jmp	Label_Get_SVGA_Mode_Info
+;=======获取SVGA Mode Info失败
+Label_Get_SVGA_Mode_Info_FAIL:
+	mov	ax,1301h
+	mov	bx,008Ch
+	mov	dx,0D00h		
+	mov	cx,24
+	push ax
+	mov	ax,ds
+	mov	es,ax
+	pop	ax
+	mov	bp,GetSVGAModeInfoErrMessage
+	int	10h
+;=======获取SVGA Mode Info成功
+Label_Get_SVGA_Mode_Info_OK:
+	mov	ax,1301h
+	mov	bx,000Fh
+	mov	dx,0E00h		
+	mov	cx,30
+	push ax
+	mov	ax,ds
+	mov	es,ax
+	pop	ax
+	mov	bp,GetSVGAModeInfoOKMessage
+	int	10h
+    jmp $       ;调试用，屏幕显示P65 图3-9 Loader执行效果图
 
 [SECTION .s16lib]   ;SECTION伪指令追加定义一个名为.s16lib的段，说明是16位实模式下的函数库
 [BITS 16]
@@ -287,6 +523,44 @@ Lable_Even_2:
     pop bx
     pop es
     ret
+;=======显示保存在AL寄存器内的十六进制数值，为显示一些查询到的物理地址空间信息,AL=要显示的十六进制数
+Label_DispAL:
+    push ecx
+    push edx
+    push edi
+    mov edi,[DisplayPosition]   ;EDI=(DS:DisplayPosition)=字符游标索引值（屏幕偏移值）
+    mov ah,0FH                  ;AH=字体颜色属性值
+    mov dl,al                   ;为先显示AL寄存器的高四位数据，先把AL的低四位数据保存至DL
+    shr al,4                    ;AL的高四位数据右移至低四位
+    mov ecx,2                   ;ECX=2设置loop .begin指令的段循环次数为2（先显示AL高四位，再显示AL低四位）
+.begin:
+    and al,0FH      ;AL=AL&0000 1111，只保留低四位（也即原来数据的高四位）
+    cmp al,9        ;将原高四位数据与9比较
+    ja .1           ;CF=0（AL>9）且ZF=0（AL!=9），则跳转至.1段执行
+    add al,'0'      ;否则直接将其与字符'0'相加
+    jmp .2
+.1:
+    sub al,0AH
+    add al,'A'
+.2:
+    mov [gs:edi],ax ;(GS:DisplayPosition)显示字符内存空间0xB8000H=AX
+    add edi,2       ;显示一个字符需要2Bytes
+    mov al,dl       ;AL=DL=AL源数据的低四位，继续显示
+    loop .begin
+    mov [DisplayPosition],edi   ;(DS:DisplayPosition)=EDI
+    pop edi
+    pop edx
+    pop ecx
+    ret
+
+;=======为IDT开辟内存空间，因为切换至保护模式前Loader.bin已使用cli指令关闭中断，进而不必完整初始化IDT
+;=======只须有相应的结构体即可；若能保证模式切换过程中不产生异常，没有IDT也可以
+IDT:
+    times 0x50 dq 0
+IDT_END:
+IDT_POINTER:            ;与GdtPtr相似，都是指向结构体的指针
+    dw IDT_END-IDT-1
+    dd IDT
 
 RootDirSizeForLoop dw RootDirSectors
 SectorNo dw 0
