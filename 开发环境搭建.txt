@@ -310,3 +310,4 @@ macOS 应用 (.dmg, .app.zip)
 Linux 包 (.deb, .rpm, .tar.gz)
 移动应用包 (.apk, .ipa)
 压缩的源代码 (.zip, .tar.gz) - 虽然 Git 标签本身就包含了源代码快照，但有时提供一个方便下载的压缩包也是有用的。
+4.发布Release后有新的提交commit，如果想合并该commit，最好是删除当前版本Release再删除对应tag，之后再新建tag和Release

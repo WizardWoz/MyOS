@@ -453,7 +453,142 @@ Label_Get_SVGA_Mode_Info_OK:
 	pop	ax
 	mov	bp,GetSVGAModeInfoOKMessage
 	int	10h
-    jmp $       ;调试用，屏幕显示P65 图3-9 Loader执行效果图
+    ;jmp $       ;调试用，屏幕显示P65 图3-9 Loader执行效果图
+;=======开始设置VBE显示模式
+Label_SET_SVGA_Mode_VESA_VBE:
+    ;int 10h，AH=4FH，子功能指定要执行VESA BIOS EXTENSION
+    ;AL=00h：获取VBE控制器信息；AL=01h：获取VBE模式信息；AL=02h：设置VBE视频模式；AL=03h：获取当前VBE视频模式。
+    ;AL=04h：保存/恢复VBE状态；AL=05h：屏幕窗口控制；AL=06h：设置逻辑像素格式
+    mov	ax,4F02h
+    ;BX=想要设置的VBE视频模式的编号
+	mov	bx,4180h	;有效的VBE显示模式代码0x180 or 0x143
+	int 10h
+    ;int 10h,AH=4FH输出：AX存放VBE状态（AH=00h表示成功，AH=01h表示失败），AL=4FH（AL!=4FH也是失败）
+    ;ES:DI：缓冲区会被填充VBEControllerInfo结构体，包含显卡信息、支持的VBE模式列表等
+	cmp	ax,004Fh
+	jnz	Label_SET_SVGA_Mode_VESA_VBE_FAIL
+;=======初始化GDT、IDT；从16bit实模式切换到32bit保护模式
+;=======为保证代码在不同代Intel处理器上的兼容情况，建议遵循以下步骤进行模式切换
+    cli                 ;1.cli禁止可屏蔽硬件中断，不可屏蔽中断NMI只能借助外部电路禁止
+    db 0x66             ;当NASM编译器处于16位宽状态下，使用32位宽数据指令需要加上指令前缀0x66
+    lgdt [GdtPtr]       ;2.实模式下lgdt将GDT的基地址和长度加载到GDTR
+    ;db 0x66
+    ;lidt [IDT_POINTER] ;3.实模式下lidt将IDT的基地址和长度加载到IDTR
+    mov eax,cr0
+    or eax,1
+    mov cr0,eax         ;4.将CR0控制寄存器的PE标志位置为1即进入保护模式，可同时将PG标志位置为1开启分页模式
+    ;5.PE标志位置为1后，因为代码段寄存器CS不能直接用赋值方法改变
+    ;必须紧接着执行jmp far或者call far，可改变处理器执行流水线，使处理器加载保护模式代码段
+    ;6.若开启分页机制（PG位=1），则mov cr0指令和jmp/call指令必须位于同一地址映射后的页面内
+    ;jmp/call指令的目标地址无需进行同一性地址映射（线性地址与物理地址重合）
+    jmp dword SelectorCode32:GO_TO_TMP_Protect
+    ;7.如需使用LDT（多段式操作系统的局部描述符表），则需借助LLDT指令将GDT内的LDT段选择子加载到LDTR
+    ;8.如需使用多任务机制或允许改变特权级，则必须在首次执行任务切换前，创建至少一个任务状态段TSS结构体和附加的TSS段描述符
+    ;并使用LTR指令将一个TSS段描述符的段选择子加载至TR任务寄存器；处理器对TSS段结构体无特殊要求，可写的内存空间即可
+    ;9.进入保护模式后，数据段寄存器仍保留实模式的数据，必须重新加载数据段选择子或使用jmp/call指令（第5步）
+    ;10.保护模式下LIDT指令将IDT表基地址和长度加载到IDTR（选择在切换到保护模式后才加载是因为可以采用任务门）
+    ;11.STI指令使能可屏蔽硬件中断，并执行必要的硬件操作使能NMI不可屏蔽中断
+;=======设置VBE显示模式失败
+Label_SET_SVGA_Mode_VESA_VBE_FAIL:
+	jmp	$
+
+[SECTION .s32]  ;SECTION伪指令追加定义一个名为.s32的段，说明此时代码在32位保护模式下运行
+[BITS 32]       ;BITS伪指令通知NASM编译器应为32位宽的处理器生成代码
+;=======暂时进入32位保护模式下进行操作
+GO_TO_TMP_Protect:
+	mov	ax,0x10
+	mov	ds,ax
+	mov	es,ax
+	mov	fs,ax
+	mov	ss,ax       ;DS=ES=FS=SS=0x10
+	mov	esp,7E00h   ;ESP=0x00007E00
+    ;jmp $   ;调试用（已成功），处理器暂停在此，Bochs虚拟机中输入Ctrl+C，然后再输入sreg查看当前段寄存器
+	call support_long_mode  ;测试处理器是否支持64位长模式
+    ;TEST指令执行op1和op2之间的按位逻辑AND运算。运算结果本身会被丢弃，但以下标志位会根据运算结果进行设置
+    ;ZF：EAX=0则为1，EAX!=0则为0；SF：与结果最高位相同；PF：运算结果低8位包含偶数个1则为1，否则为0；CF、OF：为0；AF：未定义
+	test eax,eax
+	jz not_support_long_mode    ;若EAX=0，ZF=1则处理器不支持IA-32e
+;=======1.为IA-32e 64bit长模式配置临时页目录项和页表项；页目录首地址是0x90000
+	mov	dword [0x90000],0x91007     ;配置各级页表项：由页表起始地址和页属性组成
+    mov dword [0x90004],0x00000
+	mov	dword [0x90800],0x91007
+    mov dword [0x90804],0x00000
+	mov	dword [0x91000],0x92007
+    mov dword [0x91004],0x00000
+	mov	dword [0x92000],0x000083
+    mov dword [0x92004],0x000000
+	mov	dword [0x92008],0x200083
+    mov dword [0x9200C],0x000000
+	mov	dword [0x92010],0x400083
+    mov dword [0x92014],0x000000
+	mov	dword [0x92018],0x600083
+    mov dword [0x9201C],0x000000
+	mov	dword [0x92020],0x800083
+    mov dword [0x92024],0x000000
+	mov	dword [0x92028],0xa00083
+    mov dword [0x9202C],0x000000
+;=======2.重新加载全局描述符表GDT，并初始化大部分段寄存器
+	db 0x66
+	lgdt [GdtPtr64]
+	mov	ax,0x10
+	mov	ds,ax
+	mov	es,ax
+	mov	fs,ax
+	mov	gs,ax
+	mov	ss,ax       ;DS=ES=FS=GS=SS=AX=0x10
+	mov	esp,7E00h   ;ESP=0x7E00
+    ;jmp $   ;调试用（已成功），Bochs虚拟机中输入Ctrl+C使处理器暂停在此，然后再输入sreg查看当前段寄存器
+;=======3.通过置位CR4控制寄存器的PAE标志位，打开物理地址扩展功能PAE
+	mov	eax,cr4
+	bts	eax,5           ;CR4寄存器的第5位是PAE功能的标志位
+	mov	cr4,eax
+;=======4.将临时页目录的首地址设置到CR3控制寄存器中
+	mov	eax,0x90000
+	mov	cr3,eax
+;=======5.通过置位IA32_EFER寄存器的LME标志位激活IA-32e 64bit长模式
+    ;IA32_EFER位于MSR寄存器组内，第8位是LME标志位
+	mov	ecx,0C0000080h  ;访问MSR前必须向ECX寄存器（64bit模式下RCX寄存器的高32位被忽略）传入寄存器地址
+	rdmsr   ;读取目标MSR寄存器，是由EDX:EAX组成的64位寄存器代表；EDX保存MSR寄存器的高32位，EAX保存低32位
+	bts	eax,8   ;EAX=IA32_EFER，将其第8位LME标志位置为1
+	wrmsr   ;往目标MSR寄存器写入修改好的EAX
+;=======6.同时置位CR0寄存器的PE标志位和PG标志位，开启分页机制
+	mov	eax,	cr0
+	bts	eax,	0
+	bts	eax,	31
+	mov	cr0,	eax
+    ;至此处理器进入IA-32e模式，但是处理器目前正在执行保护模式的程序，该状态称为兼容模式
+;=======7.需要一条跨段jmp/call指令将CS段寄存器的值更新为IA-32e的代码段描述符，则处理器真正运行在IA-32e模式
+	jmp	SelectorCode64:OffsetOfKernelFile
+;=======测试当前平台是否支持64位长模式
+support_long_mode:
+    ;因为CPUID指令的扩展功能项0x80000001的第29位指示处理器是否支持IA-32e模式，所以本段程序先检测当前处理器对CPUID的支持情况
+    ;只有当CPUID的扩展功能号大于等于0x80000001时，才有可能支持64bit长模式
+    ;CPUID指令无显式操作数，EAX=基础功能号/叶；ECX=扩展功能号（可选）
+	mov	eax,0x80000000      ;EAX=0x80000000获取最大扩展功能号
+	cpuid                   ;EAX、EBX、ECX、EDX存放处理器鉴定信息和机能信息
+    ;输出EAX=处理器支持的最大扩展功能号 (Extended Function CPUID leaf)
+    ;例如：如果返回0x80000008，表示支持从0x80000000到0x80000008的扩展功能号
+	cmp	eax,0x80000001      ;比较EAX与0x80000001的大小，若EAX>=0x80000001则CF标志位为0
+    ;SETNB指令根据CF标志位的状态来设置其操作数（一个字节长度，可以是8bit寄存器或内存单元），与SETAE和SETNC等效
+	setnb al                ;若CF=0则AL=1；若CF=1则AL=0
+	jb support_long_mode_done   ;若CF=1（即AL=0）则跳转至support_long_mode_done
+	mov	eax,0x80000001      ;EAX=0x80000001获取扩展处理器信息和特性位
+	cpuid
+    ;EAX：保留/扩展处理器签名；EBX：保留；ECX：扩展特性标志位；EDX：扩展特性标志位
+    ;BT指令（Bit Test）用于测试指定操作数中某个位的值，并将该位的值复制到进位标志（CF）中
+	bt edx,29               ;测试位来源：EDX寄存器；测试位索引（立即数或16bit寄存器或32bit寄存器）：29（从0开始计数）
+    ;SETC指令检查EFLAGS寄存器中的进位标志（CF）。如果CF为1（表示发生了进位或借位），SETC会将其目标字节操作数设置为1
+    ;如果CF为0（表示没有发生进位或借位），SETC会将目标字节操作数设置为0
+	setc al
+;=======支持64位长模式
+support_long_mode_done:
+    ;MOVZX指令用于将一个较小尺寸的源操作数（可以是寄存器或内存地址）移动到一个较大尺寸的寄存器目标操作数
+    ;并在高位用零进行填充（零扩展）
+	movzx eax,al
+	ret         ;返回GO_TO_TMP_Protect
+;=======不支持64位长模式
+not_support_long_mode:
+	jmp	$
 
 [SECTION .s16lib]   ;SECTION伪指令追加定义一个名为.s16lib的段，说明是16位实模式下的函数库
 [BITS 16]
