@@ -41,12 +41,139 @@ entry64:
 	movq %rax,%ss					//DS=ES=FS=SS=RAX
 	movq $0xFFFF800000007E00,%rsp	//栈指针rsp=0xFFFF800000007E00
 	//movq _stack_start(%rip),%rsp	//栈指针RSP=基地址RIP+偏移地址_stack_start=第一个进程的内核层栈基地址
+//负责初始化中断描述符表IDT内部的每个中断描述符（共256项，每项占16Bytes）
+setup_IDT:
+	/*
+	  leaq source, destination：在逆向工程和优化代码中常见
+	  1.source：必须是一个内存操作数（Memory Operand）。但与大多数指令不同，leaq不会读取内存中的值，而是计算出这个内存地址本身
+	  2.destination：必须是一个通用寄存器（如%rax、%rbx、%rcx、%rdx、%rsi、%rdi、%rbp、%rsp、%r8-%r15等）
+	  3.计算有效地址的公式是：Effective Address=base+index*scale+offset
+	  base：基址寄存器（一个通用寄存器）；index：索引寄存器（一个通用寄存器）；scale：比例因子，只能是1、2、4或8。offset：偏移量，一个立即数（常数）。
+	  4.一些例子：
+	  leaq (%rax,%rbx),%rcx：计算 %rax+%rbx，结果存入%rcx。等价于movq %rax,%rcx; addq %rbx,%rcx
+	  leaq 10(%rax),%rbx：计算 %rax+10，结果存入%rbx。等价于movq %rax,%rbx; addq $10,%rbx
+	  leaq (%rax,%rax,2),%rbx：计算%rax+%rax*2，即3*%rax，结果存入%rbx
+	  leaq 4(%rax,%rcx,8),%rdx：计算%rax+%rcx*8+4，结果存入%rdx
+	  5.优点：不会修改EFLAGS寄存器中的标志位、由CPU的地址生成单元（AGU）处理，通常独立于主算术逻辑单元（ALU）。这意味着leaq可以与其他算术指令并行执行，提高流水线效率
+	*/
+	leaq ignore_int(%rip),%rdx		//RDX=基地址RIP+偏移地址ignore_int
+	movq $(0x08<<16),%rax			//RAX=0x08<<16=1000 0000 0000 0000 0000=0x0000 0000 0001 0000
+	movw %dx,%ax					//AX=DX
+	movq $(0x8E00<<32),%rcx			//RCX=0x8E00<<32=0x0000 8E00 0000 0000
+	addq %rcx,%rax					//RAX=RAX+RCX=0x0000 8E00 0001 0000
+	movl %edx,%ecx					//ECX=EDX=基地址RIP+偏移地址ignore_int
+	shrl $16,%ecx					//ECX右移16位
+	shlq $48,%rcx					//RCX左移48位，此时RCX最高16位=ECX的最高16位
+	addq %rcx,%rax					//RAX=RAX+RCX=0x0000 8E00 0001 0000+基地址RIP+偏移地址ignore_int
+	shrq $32,%rdx					//RDX右移32位，此时EDX=RDX高32位
+	leaq IDT_Table(%rip),%rdi		//RDI=基地址RIP+偏移地址IDT_Table，也即IDT_Table在内存中的地址
+	mov $256,%rcx					//RCX=256，设置rp_sidt的循环次数
+//将256个中断描述符项统一初始化
+rp_sidt:
+	movq %rax,(%rdi)				//(ES:RDI)=RAX
+	movq %rdx,8(%rdi)				//(ES:RDI+8)=RDX，每个中断描述符都是16B
+	addq $0x10,%rdi					//RDI=RDI+16
+	dec %rcx						//RCX=RCX-1
+	jne rp_sidt						//若RCX未到0，继续循环
+//对任务状态段描述符TSS Descriptor进行初始化
+setup_TSS64:
+	leaq TSS64_Table(%rip),%rdx		//RDX=基地址RIP+偏移地址TSS64_Table
+	xorq %rax,%rax					//RAX=0
+	xorq %rcx,%rcx					//RCX=0
+	movq $0x89,%rax					//RAX=0x0000 0000 0000 0089
+	shlq $40,%rax					//RAX左移40位=0x0000 8900 0000 0000
+	movl %edx,%ecx					//ECX=EDX
+	shrl $24,%ecx					//ECX右移24位
+	shlq $56,%rcx					//RCX左移56位
+	addq %rcx,%rax					//RAX=RAX+RCX=0x0000 8900 0000 0000+
+	xorq %rcx,%rcx					//RCX=0
+	movl %edx,%ecx					//ECX=EDX
+	andl $0xFFFFFF,%ecx				//ECX=ECX&0x00FFFFFF，只保留ECX的低24位
+	shlq $16,%rcx					//RCX左移16位
+	addq %rcx,%rax					//RAX=RAX+RCX=
+	addq $103,%rax					//RAX=RAX+103
+	leaq GDT_Table(%rip),%rdi		//RDI=基地址RIP+偏移地址GDT_Table=GDT_Table在内存中的地址
+	movq %rax,64(%rdi)				//(RDI+64)=RAX
+	shrq $32,%rdx					//RDX右移32位
+	movq %rdx,72(%rdi)				//(RDI+72)=RDX
+	//main.c中的load_TR(8)调用gate.h中的load_TR宏函数将TSS段描述符的段选择子加载到TR寄存器
+	//此时TR寄存器的Busy标志位=1，如果head.S中重复加载此描述符则产生#TS异常
+	//Bochs显示LTR: doesn't point to an availiable TSS descriptor!日志信息，甚至使虚拟机崩溃
+	//mov $0x40,%ax					//AX=0x40
+	//在无特权级变化的情况下，即使不加载TSS Descriptor的选择子到TR寄存器，异常仍可被捕获并处理
+	//但如果缺少TSS Descriptor支持，异常可能会使Bochs显示LTR: doesn't point to an availiable TSS descriptor!日志信息，甚至使虚拟机崩溃
+	//ltr %ax				//LTR指令将TSS Descriptor选择子加载到TR寄存器
 	movq go_to_kernel(%rip),%rax	//RAX=基地址RIP+偏移地址go_to_kernel
 	pushq $0x08			//内核代码段选择子
 	pushq %rax			//段内地址偏移
 	lretq				//跳转至main.c中定义的函数Start_Kernel继续执行
 go_to_kernel:
 	.quad Start_Kernel
+/*
+  反汇编objdump -D system，而不是objdump -D kernel.bin，因为只有system文件记录内核程序各个段信息，能显示出每条指令地址及详细信息
+  而kernel.bin只保存程序机器码，不含有任何段描述信息，无法通过该文件查询程序的指令地址
+*/
+//此处暂时将ignore_int作为所有异常的处理程序，详细的内部异常处理程序在trap.h和trap.c
+ignore_int:
+	cld			//清除DF标志位，使DF=0
+	pushq %rax
+	pushq %rbx
+	pushq %rcx
+	pushq %rdx
+	pushq %rbp
+	pushq %rdi
+	pushq %rsi
+	pushq %r8
+	pushq %r9
+	pushq %r10
+	pushq %r11
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	movq %es,%rax
+	pushq %rax
+	movq %ds,%rax
+	pushq %rax
+	movq $0x10,%rax
+	movq %rax,%ds
+	movq %rax,%es				//ES=DS=RAX=0x10内核数据段
+	leaq int_msg(%rip),%rax		//RAX=基地址RIP+偏移地址int_msg
+	pushq %rax
+	//汇编语言调用C语言
+	//cdecl调用约定：参数从左向右顺序是RDI、RSI、RDX、RCX、R8、R9，剩余参数使用内存传递，
+	//RDI保存字体颜色；RSI保存背景颜色；RDX保存待显示的字符串起始地址；RAX存放函数返回值，调用者负责平衡栈
+	movq %rax,%rdx				//RDX=RAX
+	movq $0x00000000,%rsi		//RSI=0x0000 0000 0000 0000
+	movq $0x00ff0000,%rdi		//RDI=0x0000 0000 00FF 0000
+	movq $0,%rax				//RAX=0
+	callq color_printk
+	addq $0x8,%rsp				//RSP=RSP+8，调用者负责平衡栈
+Loop:
+	jmp Loop			//jmp指令死循环
+	popq %rax
+	movq %rax,%ds
+	popq %rax
+	movq %rax,%es
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %r11
+	popq %r10
+	popq %r9
+	popq %r8
+	popq %rsi
+	popq %rdi
+	popq %rbp
+	popq %rdx
+	popq %rcx
+	popq %rbx
+	popq %rax
+	iretq
+//0号异常：除零异常发生时，屏幕出现提示消息
+int_msg:
+	.asciz "Unknown interrupt or fault at RIP\n"
 
 //=======创建并初始化各级页表及页表项
 //=======IA-32e模式下有4KB，2MB，1GB大小的物理页，使用2MB以下的物理页会导致页颗粒零碎，从而造成频繁的物理页维护工作
