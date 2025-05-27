@@ -179,7 +179,7 @@ Label_Go_On_Loading_File:
     jmp Label_Go_On_Loading_File;继续读loader.bin的下一个磁盘簇
 ;======准备跳转至loader.bin程序处执行
 Label_File_Loaded:
-    jmp $     ;段间地址跳转（长跳转指令），必须明确指定跳转的目标段和段内偏移地址
+    jmp BaseOfLoader:OffsetOfLoader     ;段间地址跳转（长跳转指令），必须明确指定跳转的目标段和段内偏移地址
                                         ;(CS)=0x1000，实模式下BaseOfLoader段基地址=0x1000<<4=0x10000
 
 ;=======int 13h,AH=02h：读取磁盘扇区，执行成功CF=0
@@ -260,3 +260,4 @@ LoaderFileName: db "LOADER  BIN",0
 ;=======用0填充当前扇区剩余空间
 	times 510-($-$$) db 0   ;$表示当前行被编译后的地址；$$表示当前节（Section）：Label_Start的起始地址
 	dw 0xaa55
+	times 1474560-($-$$) db 0   ;为剩下的2879个扇区填充0，是使用cp loader.bin /media引入loader.bin的必要前提
