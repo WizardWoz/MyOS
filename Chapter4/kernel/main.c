@@ -7,6 +7,7 @@
 #include "printk.h"
 #include "gate.h"
 #include "trap.h"
+#include "memory.h"
 
 void Start_Kernel(void)
 {
@@ -72,7 +73,10 @@ void Start_Kernel(void)
     // 触发向量号为0的#DE除法错误异常，成功显示P109 图4-8、P120 图4-11
     // i=1/0;
     // 触发向量号为14的#PF页错误异常，成功显示P121 图4-12
-    i=*(int *)0xffff80000aa00000;
+    // i=*(int *)0xffff80000aa00000;
+    // 从物理地址0x7E00（线性地址为0xFFFF800000007E00）处获取物理内存信息
+    color_printk(RED, BLACK, "memory init\n");
+    init_memory();
     while (1)
     {
         ;
