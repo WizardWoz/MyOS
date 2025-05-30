@@ -5,6 +5,8 @@
 */
 #include "lib.h"
 #include "printk.h"
+#include "gate.h"
+#include "trap.h"
 
 void Start_Kernel(void)
 {
@@ -62,7 +64,15 @@ void Start_Kernel(void)
     }
     // 打印"Hello World!"字符串，成功显示P100 图4-5
     color_printk(YELLOW, BLACK, "Hello\t\tWorld!\n");
-    i=1/0;
+    load_TR(8); // 将TSS段描述符的段选择子加载到TR寄存器
+    //配置TSS段内的各个RSP和IST项
+    set_tss64(0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00,
+              0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00);
+    sys_vector_init();
+    // 触发向量号为0的#DE除法错误异常，成功显示P109 图4-8、P120 图4-11
+    // i=1/0;
+    // 触发向量号为14的#PF页错误异常，成功显示P121 图4-12
+    i=*(int *)0xffff80000aa00000;
     while (1)
     {
         ;

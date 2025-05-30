@@ -244,6 +244,7 @@ GDT_END:
 GDT_POINTER:
 GDT_LIMIT: .word GDT_END-GDT_Table-1	//GDT表长度
 GDT_BASE:  .quad GDT_Table				//GDT表基址
+
 //以下为中断描述符表IDT结构，中断和异常向量在同一张IDT内，只是向量号不同，前32个向量号被异常占用（0~31固定不可更改），从32号开始被中断处理程序所用
 .globl IDT_Table
 IDT_Table:
@@ -252,6 +253,7 @@ IDT_END:
 IDT_POINTER:
 IDT_LIMIT: .word IDT_END-IDT_Table-1	//IDT表长度
 IDT_BASE: .quad IDT_Table				//IDT表基址
+
 //以下为任务状态段TSS结构
 .globl TSS64_Table
 TSS64_Table:

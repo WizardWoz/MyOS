@@ -239,6 +239,7 @@ GDT_POINTER:
 GDT_LIMIT: .word GDT_END-GDT_Table-1
 GDT_BASE: .quad GDT_Table
 
+
 .globl IDT_Table
 IDT_Table:
  .fill 512,8,0
@@ -246,6 +247,7 @@ IDT_END:
 IDT_POINTER:
 IDT_LIMIT: .word IDT_END-IDT_Table-1
 IDT_BASE: .quad IDT_Table
+
 
 .globl TSS64_Table
 TSS64_Table:
