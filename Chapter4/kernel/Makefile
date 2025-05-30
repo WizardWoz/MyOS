@@ -14,7 +14,7 @@ head.o:		head.S
 	gcc -E head.S > head.s
 	as --64 -o head.o head.s
 #为entry.S生成编译文件entry.o，非可执行程序（编译）
-entry.o:		entry.S
+entry.o:	entry.S
 	gcc -E entry.S > entry.s
 	as --64 -o entry.o entry.s
 #-mcmodel选项用于指定编译时的“内存模型”（memory model）。内存模型决定了编译器如何生成代码来访问内存，特别是关于地址寻址的方式
