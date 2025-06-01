@@ -45,6 +45,11 @@
 #define PG_K_Share_To_U (1 << 8)  // 内核层与用户层共享，PG_K_Share_To_U=256
 #define PG_Slab (1 << 9)          // SLAB内存池使用，PG_Slab=512
 
+// struct Zone内存段的属性（alloc_pages函数的int zone_select参数）
+#define ZONE_DMA (1 << 0) 		// ZONE_DMA=1
+#define ZONE_NORMAL (1 << 1)	// ZONE_NORMAL=2
+#define ZONE_UNMAPPED (1 << 2)	// ZONE_UNMAPPED=4
+
 /*
   宏函数：将参数addr地址按2MB页的上边界对齐
   参数：
@@ -211,8 +216,9 @@ struct Global_Memory_Descriptor
 };
 extern struct Global_Memory_Descriptor memory_management_struct; // 在main.c中定义
 
-void init_memory();
 unsigned long page_init(struct Page *page, unsigned long flags);
+void init_memory();
+struct Page *alloc_pages(int zone_select, int number, unsigned long page_flags);
 
 /*
   函数：读取CR3寄存器中的页目录物理基地址，并将其传递给函数调用者

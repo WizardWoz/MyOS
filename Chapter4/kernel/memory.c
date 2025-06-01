@@ -257,3 +257,87 @@ void init_memory()
     }
     flush_tlb(); // 虽然已将页表项清零，但不会立即生效，必须调用flush_tlb()函数才能使更改生效
 }
+
+/*函数：完成可用物理内存页的分配
+  参数：
+  1.int zone_select：选择哪种内存区域（DMA区域空间，已映射页表区域空间，未映射页表区域空间）
+  2.int number：申请的物理内存页数，单次可申请上限为64个页
+  3.unsigned long page_flags：物理页需要设置的struct Page属性
+*/
+struct Page *alloc_pages(int zone_select, int number, unsigned long page_flags)
+{
+    int i;
+    unsigned long page = 0;
+    int zone_start = 0;
+    int zone_end = 0;
+    // 根据zone_select参数判定需要检索的内存区域空间，若无法匹配到相应的内存空间，则打印错误日志并使函数返回
+    switch (zone_select)
+    {
+    case ZONE_DMA:
+        zone_start = 0;
+        zone_end = ZONE_DMA_INDEX;
+        break;
+    case ZONE_NORMAL:
+        zone_start = ZONE_DMA_INDEX;
+        zone_end = ZONE_NORMAL_INDEX;
+        break;
+    case ZONE_UNMAPPED:
+        zone_start = ZONE_UNMAPPED_INDEX;
+        zone_end = memory_management_struct.zones_size - 1;
+        break;
+    default:
+        color_printk(RED, BLACK, "alloc_pages error zone_select index\n");
+        return NULL;
+        break;
+    }
+
+    // 已确定内存区域，接下来从该区域中遍历出符合申请条件的struct Page结构体组
+    for (i = zone_start; i <= zone_end; i++) // 从目标内存区域起始内存页结构开始遍历，直到内存区域空间的结尾
+    {
+        struct Zone *z;
+        unsigned long j;
+        // start存储当前内存区域的起始页号，end存储当前内存区域的结束页号，length存储当前内存区域长度
+        unsigned long start, end, length;
+        unsigned long tmp;
+        if ((memory_management_struct.zones_struct + i)->page_free_count < number)
+        {
+            continue;
+        }
+        // 起始内存页结构对应的bit映射位图往往位于非对齐（unsigned long类型）位置处，每次将按unsigned long类型
+        // 作为步进长度，同时按unsigned long对齐，所以起始页的映射位图只能检索tmp=64-start%64次
+        z = memory_management_struct.zones_struct + i;
+        start = z->zone_start_address >> PAGE_2M_SHIFT;
+        end = z->zone_end_address >> PAGE_2M_SHIFT;
+        length = z->zone_length >> PAGE_2M_SHIFT;
+        tmp = 64 - start % 64;
+        // j += j % 64 ? tmp : 64将索引变量j调整到对齐位置
+        for (j = start; j <= end; j += j % 64 ? tmp : 64)
+        {
+            unsigned long *p = memory_management_struct.bits_map + (j >> 6);
+            unsigned long shift = j % 64;
+            unsigned long k;
+            for (k = shift; k < 64 - shift; k++)
+            {
+                // 为保证alloc_pages函数最多可检索出64个连续的物理页，使用(*p >> k) | (*(p + 1) << (64 - k))
+                // 将后一个unsigned long变量的低位部分补齐到正在检索的变量
+                // 对64位寄存器来说左移范围是0~63.当申请值number是64必须经过特殊处理number == 64 ? 0xFFFFFFFFFFFFFFFFUL : ((1UL << number) - 1)
+                if (!(((*p >> k) | (*(p + 1) << (64 - k))) & (number == 64 ? 0xFFFFFFFFFFFFFFFFUL : ((1UL << number) - 1))))
+                {
+                    unsigned long l;
+                    page = j + k - 1;
+                    // 如果检索出满足条件的物理页组，便使用page_init将bit映射位图对应的内存页结构struct page初始化，
+                    // 并使用goto find_free_pages返回第一个内存页结构的地址
+                    for (l = 0; l < number; l++)
+                    {
+                        struct Page *x = memory_management_struct.pages_struct + page + l;
+                        page_init(x, page_flags);
+                    }
+                    goto find_free_pages;
+                }
+            }
+        }
+    }
+    return NULL;
+find_free_pages:
+    return (struct Page *)(memory_management_struct.pages_struct + page);
+}
