@@ -4,6 +4,9 @@
 # 1 "/usr/include/stdc-predef.h" 1 3 4
 # 1 "<命令行>" 2
 # 1 "head.S"
+# 1 "linkage.h" 1
+# 2 "head.S" 2
+
 .section .text
 .globl _start
 _start:
@@ -45,11 +48,11 @@ entry64:
  movq %rax,%es
  movq %rax,%gs
  movq %rax,%ss
- movq $0xFFFF800000007E00,%rsp
 
+ movq _stack_start(%rip),%rsp
 
 setup_IDT:
-# 59 "head.S"
+# 61 "head.S"
  leaq ignore_int(%rip),%rdx
  movq $(0x08<<16),%rax
  movw %dx,%ax
@@ -168,6 +171,15 @@ Loop:
 
 int_msg:
  .asciz "Unknown interrupt or fault at RIP\n"
+
+
+
+
+
+
+.global _stack_start; _stack_start:
+ .quad init_task_union+32768
+
 
 
 

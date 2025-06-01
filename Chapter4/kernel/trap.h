@@ -5,11 +5,11 @@
 #include "printk.h"
 #include "lib.h"
 
-void divide_error();
-void nmi();
-void invalid_TSS();
-void page_fault();
+void divide_error();    //trap.h中声明，entry.S中定义
+void nmi();             //trap.h中声明，entry.S中定义
+void invalid_TSS();     //trap.h中声明，entry.S中定义
+void page_fault();      //trap.h中声明，entry.S中定义
 
-void sys_vector_init();
+void sys_vector_init(); //trap.h中声明，trap.c中定义
 
 #endif

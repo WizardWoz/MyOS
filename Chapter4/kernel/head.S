@@ -1,3 +1,5 @@
+#include "linkage.h"
+
 .section .text		//伪指令.section定义段名为.text（代码段）
 .globl _start		//GAS编译器使用标识符_start作为默认起始位置；还要使用.globl修饰，若缺少则链接过程中会出现警告
 _start:
@@ -39,8 +41,8 @@ entry64:
 	movq %rax,%es
 	movq %rax,%gs
 	movq %rax,%ss					//DS=ES=FS=SS=RAX
-	movq $0xFFFF800000007E00,%rsp	//栈指针rsp=0xFFFF800000007E00
-	//movq _stack_start(%rip),%rsp	//栈指针RSP=基地址RIP+偏移地址_stack_start=第一个进程的内核层栈基地址
+	//movq $0xFFFF800000007E00,%rsp	//栈指针rsp=0xFFFF800000007E00
+	movq _stack_start(%rip),%rsp	//栈指针RSP=基地址RIP+偏移地址_stack_start=第一个进程的内核层栈基地址
 //负责初始化中断描述符表IDT内部的每个中断描述符（共256项，每项占16Bytes）
 setup_IDT:
 	/*
@@ -111,9 +113,9 @@ go_to_kernel:
 	.quad Start_Kernel
 /*
   反汇编objdump -D system，而不是objdump -D kernel.bin，因为只有system文件记录内核程序各个段信息，能显示出每条指令地址及详细信息
-  而kernel.bin只保存程序机器码，不含有任何段描述信息，无法通过该文件查询程序的指令地址
+  而kernel.bin只保存程序机器码，不含有任何段描述信息，无法通过该文件查询程序的指令地址；
+  此处暂时将ignore_int作为所有异常的处理程序，详细的内部异常处理程序在trap.h和trap.c
 */
-//此处暂时将ignore_int作为所有异常的处理程序，详细的内部异常处理程序在trap.h和trap.c
 ignore_int:
 	cld			//清除DF标志位，使DF=0
 	pushq %rax
@@ -174,11 +176,20 @@ Loop:
 //0号异常：除零异常发生时，屏幕出现提示消息
 int_msg:
 	.asciz "Unknown interrupt or fault at RIP\n"
+/*
+  全局变量_stack_start保存的数值与init_thread结构体变量中rsp0成员变量的数值相同，指向系统第一个进程的内核层基地址
+  可让内核头程序直接使用该进程的内核层栈空间，减少栈空间切换的隐患和开销
 
-//=======创建并初始化各级页表及页表项
-//=======IA-32e模式下有4KB，2MB，1GB大小的物理页，使用2MB以下的物理页会导致页颗粒零碎，从而造成频繁的物理页维护工作
-//=======4KB页面采用PML4，PDP，PD，PT；2MB页面采用PML4，PDP，PD；1G页面采用PML4,PDP
-//=======所以采用2MB物理页最为合理
+  union task_union init_task_union：在task.h中定义的全局变量，一共使用32KB存储空间，init_task_union+32768才能指向内核层基地址
+*/
+ENTRY(_stack_start)
+	.quad init_task_union+32768
+
+/*
+  创建并初始化各级页表及页表项
+  IA-32e模式下有4KB，2MB，1GB大小的物理页，使用2MB以下的物理页会导致页颗粒零碎，从而造成频繁的物理页维护工作
+  4KB页面采用PML4，PDP，PD，PT；2MB页面采用PML4，PDP，PD；1G页面采用PML4，PDP；所以采用2MB物理页最为合理
+*/
 .align 8		//伪指令.align将对齐标准设置为8B
 //伪指令.org固定各个页表的起始地址（相对于内核执行头程序起始地址的偏移量）
 //链接器根据链接脚本描述将内核执行头程序的起始线性地址设置在0xFFFF800000000000+0x100000处

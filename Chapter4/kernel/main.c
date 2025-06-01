@@ -9,12 +9,13 @@
 #include "trap.h"
 #include "memory.h"
 #include "interrupt.h"
+#include "task.h"
 
 /*经过声明后的extern变量（标识符）会被放在kernel.lds链接脚本指定的位置处（4.8进程管理已经将其放到task.h中）*/
-extern char _text; // Kernel.lds链接脚本将_text放在线性地址0xFFFF800000100000，使得_text位于内核程序的代码段起始地址
-extern char _etext;//内核代码段结束地址
-extern char _edata;//内核数据段结束地址
-extern char _end;  //内核程序结束地址 
+// extern char _text; // Kernel.lds链接脚本将_text放在线性地址0xFFFF800000100000，使得_text位于内核程序的代码段起始地址
+// extern char _etext;//内核代码段结束地址
+// extern char _edata;//内核数据段结束地址
+// extern char _end;  //内核程序结束地址 
 
 /*全局内存管理结构体变量memory_management_struct初始化
   struct e820[32]={0,0,0......,0};
@@ -97,25 +98,29 @@ void Start_Kernel(void)
     init_memory();
 
     // 4.5初级内存管理单元
-    color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *memory_management_struct.bits_map);
-    color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *(memory_management_struct.bits_map + 1));
-    page = alloc_pages(ZONE_NORMAL, 64, PG_PTable_Mapped | PG_Active | PG_Kernel);
-    // 虚拟平台前64个内存页结构的属性值被设置成0x91，而且物理地址从0x200000开始，与zonr_start_address成员变量记录一致
-    // 进而说明alloc_pages函数从本区域空间起始地址处分配物理内存页
-    // 区域空间第64，65内存页属性依然为0，说明这两个内存页未被分配过，bit映射位图从0x0000 0000 0000 0001和0x0000 0000 0000 0000
-    // 变为如今0xFFFF FFFF FFFF FFFF和0x0000 0000 0000 0001；同样是置位64个映射位
-    for (i = 0; i <= 64; i++)
-    {
-        color_printk(INDIGO, BLACK, "page%d\tattribute:%#018lx\taddress:%#018lx\t", i, (page + i)->attribute, (page + i)->PHY_address);
-        i++;
-        color_printk(INDIGO, BLACK, "page%d\tattribute:%#018lx\taddress:%#018lx\n", i, (page + i)->attribute, (page + i)->PHY_address);
-    }
-    color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *memory_management_struct.bits_map);
-    color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *(memory_management_struct.bits_map + 1));
+    // color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *memory_management_struct.bits_map);
+    // color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *(memory_management_struct.bits_map + 1));
+    // page = alloc_pages(ZONE_NORMAL, 64, PG_PTable_Mapped | PG_Active | PG_Kernel);
+    // // 虚拟平台前64个内存页结构的属性值被设置成0x91，而且物理地址从0x200000开始，与zonr_start_address成员变量记录一致
+    // // 进而说明alloc_pages函数从本区域空间起始地址处分配物理内存页
+    // // 区域空间第64，65内存页属性依然为0，说明这两个内存页未被分配过，bit映射位图从0x0000 0000 0000 0001和0x0000 0000 0000 0000
+    // // 变为如今0xFFFF FFFF FFFF FFFF和0x0000 0000 0000 0001；同样是置位64个映射位
+    // for (i = 0; i <= 64; i++)
+    // {
+    //     color_printk(INDIGO, BLACK, "page%d\tattribute:%#018lx\taddress:%#018lx\t", i, (page + i)->attribute, (page + i)->PHY_address);
+    //     i++;
+    //     color_printk(INDIGO, BLACK, "page%d\tattribute:%#018lx\taddress:%#018lx\n", i, (page + i)->attribute, (page + i)->PHY_address);
+    // }
+    // color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *memory_management_struct.bits_map);
+    // color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *(memory_management_struct.bits_map + 1));
 
     //4.6中断处理
     color_printk(RED,BLACK,"interrupt init\n");
     init_interrupt();
+
+    //4.8进程管理
+    color_printk(RED,BLACK,"task init\n");
+    task_init();
 
     while (1)
     {
