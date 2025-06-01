@@ -40,6 +40,9 @@ memory.o: 	memory.c
 #为interrupt.c生成编译文件interrupt.o（编译）
 interrupt.o: 	interrupt.c
 	gcc -mcmodel=large -fno-builtin -m64 -c interrupt.c
+#为task.c生成编译文件task.o（编译）
+task.o: 	task.c
+	gcc -mcmodel=large -fno-builtin -m64 -c task.c
 #为main.c生成编译文件main.o（编译）
 main.o:		main.c 
 	gcc -mcmodel=large -fno-builtin -m64 -c main.c

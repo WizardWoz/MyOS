@@ -8,6 +8,40 @@
 #define NULL 0
 
 /*
+  C语言typeof编译器拓展，并非标准C语言的一部分。它最先由GNU C编译器（GCC）引入，后来也被Clang等其他一些编译器支持
+  使用 typeof 可能会降低代码的可移植性，因为不保证所有C编译器都支持它
+  typeof 允许你在编译时获取一个变量或表达式的类型，而无需显式地写出这个类型。这在以下几种情况下特别有用：
+  1.声明与现有变量类型相同的变量
+  int x = 10;									double arr[5];
+  typeof(x) y; // y 的类型与 x 相同，即 int		  typeof(arr[0]) element; // element 的类型是 double
+  y = 20;
+  2.创建类型安全的宏（最强大的用途）：在宏定义中，你可能不知道传递给宏的参数的具体类型，但又需要声明一个与参数类型相同的临时变量
+  #define MAX(a, b) \					// 潜在问题：如果不用 typeof，宏可能会多次评估参数
+   ({ typeof (a) _a = (a); \			// 例如 #define MAX_BAD(a,b) ((a) > (b) ? (a) : (b))
+      typeof (b) _b = (b); \			// MAX_BAD(i++, j++) 就会导致 i 或 j 被多次自增
+      _a > _b ? _a : _b; })
+  3.简化复杂类型的声明：当处理嵌套结构体、指针或函数指针等复杂类型时，typeof 可以使代码更简洁
+  struct MyStruct s1;				int (*func_ptr)(int, int);
+  typeof(s1) s2 = s1;				typeof(func_ptr) another_func_ptr; // another_func_ptr 的类型是 int (*)(int, int)
+*/
+
+/*
+  宏函数：根据结构体变量中某成员变量基地址，算出结构体变量基地址（即反推导出父层结构的起始地址）
+  参数：
+  1.ptr：结构体内某个成员变量的基地址
+  2.type：成员变量所在结构体
+  3.member：成员变量名称
+
+  typeof(((type *)0)->member) * p = (ptr)：首先计算出成员变量member在type结构体内的偏移
+  (type *)((unsigned long)p - (unsigned long)&(((type *)0)->member));：根据ptr参数计算出结构体变量的起始地址
+*/
+#define container_of(ptr,type,member)							\
+({											\
+	typeof(((type *)0)->member) * p = (ptr);					\
+	(type *)((unsigned long)p - (unsigned long)&(((type *)0)->member));		\
+})
+
+/*
   C语言使用关键字__asm__和__volatile__修饰汇编语句，符合ANSI C标准
   __asm__是关键字asm的宏定义，声明该行代码是一个内嵌汇编表达式，任何内嵌汇编语言表达式均以此为开头，必不可少
   __volatile__告诉编译器此行代码不能被编译器优化，因为经过优化后汇编语句很可能被修改从而无法达到预期效果
@@ -45,6 +79,64 @@
 */
 
 #define sti() 		__asm__ __volatile__ ("sti	\n\t":::"memory")//sti可能影响内存且未使用m约束，所以在损坏部分使用memory
+
+/*
+  内核数据结构：不带头结点的双向链表
+  数据成员：
+  1.struct List* prev：指向前驱结点的指针
+  2.struct List* next：指向后继结点的指针
+*/
+struct List
+{
+	struct List * prev;
+	struct List * next;
+};
+
+/*
+  inline关键字：建议编译器将被 inline 修饰的函数调用，在调用处展开为函数体本身的指令，从而避免函数调用的开销（如参数压栈、跳转、返回地址保存、栈帧恢复等）
+  与宏定义#define相比，inline函数有自己的作用域；遵循C语言类型检查规则；通常更容易调试
+*/
+
+/*
+  函数：不带头结点的双向链表初始化
+  参数：
+  1.struct List* list：双向链表初始结点
+  返回值：void，无
+*/
+inline void list_init(struct List * list)
+{
+	list->prev = list;
+	list->next = list;
+}
+
+/*
+  函数：求不带头结点的双向链表中某个结点的后继结点
+  参数：
+  1.struct List* entry：原双向链表的某个结点
+  返回值：struct List*，指向后继结点
+*/
+inline struct List * list_next(struct List * entry)
+{
+	if(entry->next != NULL)
+		return entry->next;
+	else
+		return NULL;
+}
+
+/*
+  函数：不带头结点的双向链表在原结点前插入一个新结点
+  参数：
+  1.struct List* entry：原双向链表的某个结点
+  2.struct List* new：需要插入的新结点
+  返回值：void
+*/
+inline void list_add_to_before(struct List * entry,struct List * new)
+{
+	new->next = entry;
+	entry->prev->next = new;
+	new->prev = entry->prev;
+	entry->prev = new;
+}
 
 /*
   函数：内存空间初始化函数
