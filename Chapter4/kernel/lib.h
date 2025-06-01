@@ -127,6 +127,33 @@ inline int strlen(char * String)
 }
 
 /*
+  函数：CPU从设备端口读入8位（1B）数据
+  参数：
+  1.unsigned short port：16位设备端口号（0～65535）
+  返回值：unsigned char，存放从设备端口读出的1B数据
+*/
+inline unsigned char io_in8(unsigned short port)
+{
+	unsigned char ret = 0;
+	//inb：从指定的端口port（DX）读入1B数据到AL
+	__asm__ __volatile__(	"inb	%%dx,	%0	\n\t"
+	//mfence：Memory Fence（内存栅栏）用于强制内存操作的顺序性
+	//lfence(Load Fence)：只保证在lfence之前的加载操作在之后的加载操作之前完成。不保证存储操作的顺序。
+	//sfence(Store Fence)：只保证在sfence之前的存储操作在之后的存储操作之前完成。不保证加载操作的顺序。
+	//mfence(Memory Fence)：保证在mfence之前的所有加载和存储操作在之后的所有加载和存储操作之前完成。它是lfence和sfence功能的集合
+	//主要用于需要严格控制内存访问顺序的底层代码，包括：多线程库和同步原语的实现（如互斥锁、读写锁、条件变量）；
+	//无锁数据结构（Lock-Free Data Structures）的实现。设备驱动程序中与内存映射I/O端口的交互。
+				"mfence			\n\t"
+	//输出部分：相关指令执行后，将结果存入AL，并将AL存入unsigned char ret
+				:"=a"(ret)
+	//输入部分：所有指令执行前，将port存入DX
+				:"d"(port)
+	//损坏描述：访问内存映射IO需要memory声明
+				:"memory");
+	return ret;
+}
+
+/*
   函数：CPU将8位（1B）数据输出到设备端口
   参数：
   1.unsigned short port：16位设备端口号（0～65535）

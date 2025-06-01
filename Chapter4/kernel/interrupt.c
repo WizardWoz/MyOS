@@ -190,15 +190,15 @@ void init_interrupt()
 	io_out8(0xa1,0x01);		//从8259A芯片的ICW4，固定初始化为0x01
 	// 4.6 中断处理
 	// //主8259A芯片的OCW1
-	io_out8(0x21,0x00);		//主8259A芯片的OCW1，0x00表示接受所有引脚的中断请求
+	// io_out8(0x21,0x00);		//主8259A芯片的OCW1，0x00表示接受所有引脚的中断请求
 	// //从8259A芯片的OCW1
-	io_out8(0xa1,0x00);		//从8259A芯片的OCW1，0x00表示接受所有引脚的中断请求
+	// io_out8(0xa1,0x00);		//从8259A芯片的OCW1，0x00表示接受所有引脚的中断请求
 
 	// 4.8 进程管理
 	//主8259A芯片的OCW1
-	// io_out8(0x21,0xfd);		//主8259A芯片的OCW1，0xfd表示接受IRQ1引脚来自键盘的中断请求
+	io_out8(0x21,0xfd);		//主8259A芯片的OCW1，0xfd表示接受IRQ1引脚来自键盘的中断请求
 	//从8259A芯片的OCW1
-	// io_out8(0xa1,0xff);		//从8259A芯片的OCW1，0xff表示不接受所有引脚的中断请求
+	io_out8(0xa1,0xff);		//从8259A芯片的OCW1，0xff表示不接受所有引脚的中断请求
 	sti();		//通过sti指令使能中断（置位EFLAGS标志寄存器的中断标志位IF）
 }
 
@@ -230,7 +230,14 @@ void init_interrupt()
 void do_IRQ(unsigned long regs, unsigned long nr)
 {
 	// 4.6 中断管理
-	color_printk(RED,BLACK,"do_IRQ:%#08x\t",nr);//显示当前中断请求的中断向量号
+	// color_printk(RED,BLACK,"do_IRQ:%#08x\t",nr);//显示当前中断请求的中断向量号
 	// EOI模式：处理器执行完中断处理程序后，必须手动向中断控制器发送EOI结束指令，来复位ISR寄存器的对应位
-	io_out8(0x20,0x20);		//向主8259A PIC可编程中断控制器发送EOI命令复位ISR寄存器
+	// io_out8(0x20,0x20);		//向主8259A PIC可编程中断控制器发送EOI命令复位ISR寄存器
+
+	unsigned char x;
+	color_printk(RED,BLACK,"do_IRQ:%#08x\t",nr);//显示当前中断请求的中断向量号
+	x=io_in8(0x60);		//从键盘的读写缓冲区读出1B数据并存放在unsigned char x处
+	color_printk(RED,BLACK,"key code:%#08x\n",x);
+	// EOI模式：处理器执行完中断处理程序后，必须手动向中断控制器发送EOI结束指令，来复位ISR寄存器的对应位
+	io_out8(0x20,0x20);	//向主8259A PIC可编程中断控制器发送EOI命令复位ISR寄存器
 }
