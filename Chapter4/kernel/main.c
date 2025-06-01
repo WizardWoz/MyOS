@@ -8,6 +8,7 @@
 #include "gate.h"
 #include "trap.h"
 #include "memory.h"
+#include "interrupt.h"
 
 /*经过声明后的extern变量（标识符）会被放在kernel.lds链接脚本指定的位置处（4.8进程管理已经将其放到task.h中）*/
 extern char _text; // Kernel.lds链接脚本将_text放在线性地址0xFFFF800000100000，使得_text位于内核程序的代码段起始地址
@@ -111,6 +112,11 @@ void Start_Kernel(void)
     }
     color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *memory_management_struct.bits_map);
     color_printk(RED, BLACK, "memory_management_struct.bits_map:%#018lx\n", *(memory_management_struct.bits_map + 1));
+
+    //4.6中断处理
+    color_printk(RED,BLACK,"interrupt init\n");
+    init_interrupt();
+
     while (1)
     {
         ;
