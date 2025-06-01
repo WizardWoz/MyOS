@@ -9,6 +9,12 @@
 #include "trap.h"
 #include "memory.h"
 
+/*经过声明后的extern变量（标识符）会被放在kernel.lds链接脚本指定的位置处（4.8进程管理已经将其放到task.h中）*/
+extern char _text; // Kernel.lds链接脚本将_text放在线性地址0xFFFF800000100000，使得_text位于内核程序的代码段起始地址
+extern char _etext;//内核代码段结束地址
+extern char _edata;//内核数据段结束地址
+extern char _end;  //内核程序结束地址 
+
 /*全局内存管理结构体变量memory_management_struct初始化
   struct e820[32]={0,0,0......,0};
   unsigned long e820_length=0;
@@ -34,8 +40,8 @@ void Start_Kernel(void)
     Pos.YCharSize = 16;
     // 设置帧缓冲区起始地址、容量大小
     Pos.FB_addr = (int *)0xffff800000a00000;
-    Pos.FB_length = (Pos.XResolution * Pos.YResolution * 4);
-    //Pos.FB_length = (Pos.XResolution * Pos.YResolution * 4 + PAGE_4K_SIZE - 1) & PAGE_4K_MASK; // 将帧缓冲区容量与4KB页大小对齐
+    // Pos.FB_length = (Pos.XResolution * Pos.YResolution * 4);     //初始帧缓冲区大小只有4*当前屏幕分辨率
+    Pos.FB_length = (Pos.XResolution * Pos.YResolution * 4 + PAGE_4K_SIZE - 1) & PAGE_4K_MASK; // 将帧缓冲区容量与4KB页大小对齐
     // 绘制4个彩色横条（长：1440像素点；宽：20像素点）
     for (i = 0; i < 1440 * 20; i++)
     {
@@ -75,7 +81,11 @@ void Start_Kernel(void)
     //配置TSS段内的各个RSP和IST项
     set_tss64(0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00,
               0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00);
-    sys_vector_init();
+    sys_vector_init();      //初始化异常/中断向量表
+    memory_management_struct.start_code = (unsigned long)&_text;
+    memory_management_struct.end_code = (unsigned long)&_etext;
+    memory_management_struct.end_data = (unsigned long)&_edata;
+    memory_management_struct.end_brk = (unsigned long)&_end;
     // 触发向量号为0的#DE除法错误异常，成功显示P109 图4-8、P120 图4-11
     // i=1/0;
     // 触发向量号为14的#PF页错误异常，成功显示P121 图4-12
