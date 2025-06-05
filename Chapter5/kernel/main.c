@@ -79,8 +79,12 @@ void Start_Kernel(void)
     }
     // 打印"Hello World!"字符串，成功显示P100 图4-5
     color_printk(YELLOW, BLACK, "Hello\t\tWorld!\n");
-    load_TR(8); // 将TSS段描述符的段选择子加载到TR寄存器
-    set_tss64(0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00,
+    // load_TR(8); // 将TSS段描述符的段选择子加载到TR寄存器
+    load_TR(10); // 将TSS段描述符的段选择子加载到TR寄存器
+    //配置TSS段内的各个RSP和IST项
+    // set_tss64(0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00,
+    //           0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00);
+    set_tss64(_stack_start, _stack_start, _stack_start, 0xffff800000007c00, 0xffff800000007c00,
               0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00);
     sys_vector_init();
     memory_management_struct.start_code = (unsigned long)&_text;
