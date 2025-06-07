@@ -69,6 +69,7 @@ ret_from_exception:
     jmp RESTORE_ALL
 # 120 "entry.S"
 .global system_call; system_call:
+    sti
     subq $0x38,%rsp
     cld
     pushq %rax
@@ -96,7 +97,7 @@ ret_from_exception:
     movq %rdx,%es
     movq %rsp,%rdi
     callq system_call_function
-# 162 "entry.S"
+# 163 "entry.S"
 .global ret_system_call; ret_system_call:
     movq %rax,0x80(%rsp)
 
