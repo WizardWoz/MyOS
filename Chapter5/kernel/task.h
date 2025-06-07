@@ -310,7 +310,7 @@ do									\
 typedef unsigned long (*system_call_t)(struct pt_regs *regs);
 
 /*
-  函数：默认系统调用处理函数
+  函数：默认系统调用处理函数（第0号系统调用API）
   参数：
   1.struct pt_regs *regs：记录着进程的执行环境，成员变量rax保存系统调用API的向量号
   返回值：unsigned long，暂时取-1
@@ -321,9 +321,24 @@ inline unsigned long no_system_call(struct pt_regs *regs)
 	return -1;
 }
 
+/*
+  函数：字符串打印功能（第1号系统调用API）
+  参数：
+  1.struct pt_regs *regs：记录着进程的执行环境，成员变量rax保存系统调用API的向量号
+  返回值：unsigned long，暂时取1
+*/
+
+inline unsigned long sys_printf(struct pt_regs *regs)
+{
+	color_printk(BLACK,WHITE,(char *)regs->rdi);	//借助RDI寄存器向color_printk传递待打印字符串
+	return 1;
+}
+
 system_call_t system_call_table[MAX_SYSTEM_CALL_NR]=
 {
-	[0 ... MAX_SYSTEM_CALL_NR-1]=no_system_call//task.h中struct tss_struct init_tss定义也使用了指定初始化范围
+	[0]=no_system_call,//task.h中struct tss_struct init_tss定义也使用了指定初始化范围
+	[1]=sys_printf,
+	[2 ... MAX_SYSTEM_CALL_NR-1]=no_system_call
 };
 
 void task_init();
