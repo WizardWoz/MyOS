@@ -6,6 +6,9 @@
 #include "ptrace.h"
 #include "linkage.h"
 
+extern void ret_system_call(void);		//在entry.S中定义的ret_system_call函数
+extern void system_call(void);			//在entry.S中定义的system_call函数
+
 /*
   函数：init进程实体的功能
   参数：
@@ -126,13 +129,38 @@ unsigned long do_execve(struct pt_regs *regs)
 }
 
 /*
+  函数：系统调用函数
+  参数：
+  1.struct pt_regs *regs：记录着进程的执行环境，成员变量rax保存系统调用API的向量号
+  返回值：unsigned long，对应的系统调用执行后的返回值
+*/
+unsigned long system_call_function(struct pt_regs *regs)
+{
+	return system_call_table[regs->rax](regs);
+}
+
+/*
   函数：应用层执行函数
   参数：无
   返回值：void，无
 */
 void user_level_function()
 {
+	long ret=0;
 	color_printk(RED,BLACK,"user_level_function task is running\n");
+	__asm__ __volatile__(
+		"leaq sysexit_return_address(%%rip),%%rdx \n\t"	//RDX=sysexit_return_address汇编语句标号的有效地址
+		"movq %%rsp,%%rcx \n\t"		//RCX=RSP=应用层当前栈指针
+		"sysenter \n\t"		//sysenter指令直接转入内核层
+		"sysexit_return_address: \n\t"	//sysexit_return_address标号，标记系统调用完成后的返回地址
+		//输出部分：当相关指令执行后，RAX存放执行结果并转入变量ret
+		:"=a"(ret)
+		//输入部分：在所有指令执行前，RAX=系统调用API向量号15
+		:"0"(15)
+		//损坏描述：指令执行可能会影响到内存，故使用memory声明
+		:"memory"
+	);
+	color_printk(RED,BLACK,"user_level_function task called sysenter,ret:%ld\n",ret);
 	while (1)
 	{
 		;
@@ -248,6 +276,8 @@ void task_init()
     init_mm.start_stack=_stack_start;   //记录系统第一个进程的内核层栈基地址
 	//由于IA32_SYSENTER_CS这个32位寄存器位于MSR寄存器组0x174地址处，所以处理器只能借助wrmsr汇编指令才能向MSR寄存器组写入数据
 	wrmsr(0x174,KERNEL_CS);
+	wrmsr(0x175,current->thread->rsp0);		//为sysenter指令指定内核层栈指针
+	wrmsr(0x176,(unsigned long)system_call);//系统调用在内核层的入口地址（entry.S文件中system_call模块的起始地址）
     //初始化进程运行现场，初始化TSS结构体
     set_tss64(init_thread.rsp0,init_tss[0].rsp1,init_tss[0].rsp2,init_tss[0].ist1,init_tss[0].ist2,
     init_tss[0].ist3,init_tss[0].ist4,init_tss[0].ist5,init_tss[0].ist6,init_tss[0].ist7);
