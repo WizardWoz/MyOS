@@ -224,10 +224,10 @@ void init_interrupt()
 /*
   函数：中断处理程序的主函数，分发中断请求到各个中断处理函数
   参数：
-  1.unsigned long regs：栈指针
+  1.struct pt_regs *regs：指向被中断进程执行现场struct pt_regs的指针
   2.unsigned long nr：中断向量号
 */
-void do_IRQ(unsigned long regs, unsigned long nr)
+void do_IRQ(struct pt_regs *regs, unsigned long nr)
 {
 	// 4.6 中断管理
 	// color_printk(RED,BLACK,"do_IRQ:%#08x\t",nr);//显示当前中断请求的中断向量号
@@ -237,7 +237,8 @@ void do_IRQ(unsigned long regs, unsigned long nr)
 	unsigned char x;
 	color_printk(RED,BLACK,"do_IRQ:%#08x\t",nr);//显示当前中断请求的中断向量号
 	x=io_in8(0x60);		//从键盘的读写缓冲区读出1B数据并存放在unsigned char x处
-	color_printk(RED,BLACK,"key code:%#08x\n",x);
+	color_printk(RED,BLACK,"key code:%#08x\t",x);
 	// EOI模式：处理器执行完中断处理程序后，必须手动向中断控制器发送EOI结束指令，来复位ISR寄存器的对应位
 	io_out8(0x20,0x20);	//向主8259A PIC可编程中断控制器发送EOI命令复位ISR寄存器
+	color_printk(RED,BLACK,"regs:%#018lx\t<RIP:%#018lx\tRSP:%#018lx>\n",regs,regs->rip,regs->rsp);
 }
