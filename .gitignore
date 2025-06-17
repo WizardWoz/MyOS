@@ -7,3 +7,7 @@
 *.bin
 *.img
 system
+# 忽略 Junior 分支的內容
+Chapter3/
+Chapter4/
+Chapter5/
