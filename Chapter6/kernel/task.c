@@ -136,7 +136,7 @@ unsigned long do_execve(struct pt_regs *regs)
 */
 unsigned long system_call_function(struct pt_regs *regs)
 {
-	return system_call_table[regs->rax](regs);
+	return system_call_table[regs->rax](regs);	//system_call_table是存放指向各系统调用函数的指针数组
 }
 
 /*
@@ -148,15 +148,18 @@ void user_level_function()
 {
 	long ret=0;
 	color_printk(RED,BLACK,"user_level_function task is running\n");
+	char string[]="Hello World!\n";
 	__asm__ __volatile__(
 		"leaq sysexit_return_address(%%rip),%%rdx \n\t"	//RDX=sysexit_return_address汇编语句标号的有效地址
 		"movq %%rsp,%%rcx \n\t"		//RCX=RSP=应用层当前栈指针
 		"sysenter \n\t"		//sysenter指令直接转入内核层
 		"sysexit_return_address: \n\t"	//sysexit_return_address标号，标记系统调用完成后的返回地址
-		//输出部分：当相关指令执行后，RAX存放执行结果并转入变量ret
+		//输出部分：当相关指令执行后，RAX存放执行结果并转入变量ret，即task.h中no_system_call，sys_printf等函数的返回值
 		:"=a"(ret)
 		//输入部分：在所有指令执行前，RAX=系统调用API向量号15
-		:"0"(15)
+		// :"0"(15)
+		//输入部分：在所有指令执行前，RAX=系统调用API向量号15；RDI=string字符串首地址
+		:"0"(1),"D"(string)
 		//损坏描述：指令执行可能会影响到内存，故使用memory声明
 		:"memory"
 	);

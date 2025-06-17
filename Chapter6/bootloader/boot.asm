@@ -1,17 +1,99 @@
+;当前物理内存的分布图
+;|----------------------|
+;|	    100000 ~ END	|
+;|	      KERNEL	    |
+;|----------------------|
+;|		E0000 ~ 100000	|
+;| Extended System BIOS |
+;|----------------------|
+;|		C0000 ~ Dffff	|
+;|     Expansion Area   |
+;|----------------------|
+;|		A0000 ~ bffff	|
+;|   Legacy Video Area  |
+;|----------------------|
+;|		9f000 ~ A0000	|
+;|	 	BIOS reserve	|
+;|----------------------|
+;|		90000 ~ 9f000	|
+;|	 	kernel tmpbuf	|
+;|----------------------|
+;|		10000 ~ 90000	|
+;|	   		LOADER		|
+;|----------------------|
+;|		8000 ~ 10000	|
+;|	  	VBE info		|
+;|----------------------|
+;|		7e00 ~ 8000		|
+;|	  	mem info		|
+;|----------------------|
+;|		7c00 ~ 7e00		|
+;|	 	MBR (BOOT)		|
+;|----------------------|
+;|		0000 ~ 7c00		|
+;|	 	BIOS Code		|
+;|----------------------|
+
+/*
+  虚拟地址：抽象地址的统称，大多不能独立转换为物理地址，包括逻辑地址、有效地址、线性地址、平坦地址
+  1.逻辑地址（Logical Address）：段名Segment:段内偏移Offset；最终转换成线性地址，不同运行模式下的转换过程不同
+  2.有效地址（Effective Address）：即段内偏移地址Offset，在C语言/其他高级语言获得变量或函数的地址就是获得其有效地址
+  3.线性地址（Linear Address）：通过逻辑地址转换而来；处理器开启分页机制PE的情况下，经过页表映射才能转换成物理地址
+  4.平坦地址（Flat Address）：特殊的线性地址，段基地址和段长度覆盖了整个线性地址空间，而非线性地址空间中的某部分区域
+  当段基地址=0时，段内偏移地址=线性地址
+
+  物理地址：真实存在于硬件设备上，通过处理器引脚与外部设备、RAM、ROM相连接
+  1.I/O地址空间：与内存空间相互隔离，必须借助in/out指令才能访问；由65536个可独立寻址(0~FFFFH)的端口组成，F8H~FFH保留使用
+  2.内存地址空间：可用物理内存可向前兼容、片段化、不连续化；因此可用物理内存空间、设备地址空间、内存地址空洞会穿插排列在内存地址空间中
+  操作系统借助BIOS中断服务程序int 15h的主功能编号AX=E820H可获取内存地址空间的相关信息
+*/
+
+/*
+  虚拟地址：抽象地址的统称，大多不能独立转换为物理地址，包括逻辑地址、有效地址、线性地址、平坦地址
+  1.逻辑地址（Logical Address）：段名Segment:段内偏移Offset；最终转换成线性地址，不同运行模式下的转换过程不同
+  2.有效地址（Effective Address）：即段内偏移地址Offset，在C语言/其他高级语言获得变量或函数的地址就是获得其有效地址
+  3.线性地址（Linear Address）：通过逻辑地址转换而来；处理器开启分页机制PE的情况下，经过页表映射才能转换成物理地址
+  4.平坦地址（Flat Address）：特殊的线性地址，段基地址和段长度覆盖了整个线性地址空间，而非线性地址空间中的某部分区域
+  当段基地址=0时，段内偏移地址=线性地址
+
+  物理地址：真实存在于硬件设备上，通过处理器引脚与外部设备、RAM、ROM相连接
+  1.I/O地址空间：与内存空间相互隔离，必须借助in/out指令才能访问；由65536个可独立寻址(0~FFFFH)的端口组成，F8H~FFH保留使用
+  2.内存地址空间：可用物理内存可向前兼容、片段化、不连续化；因此可用物理内存空间、设备地址空间、内存地址空洞会穿插排列在内存地址空间中
+  操作系统借助BIOS中断服务程序int 15h的主功能编号AX=E820H可获取内存地址空间的相关信息
+*/
+
+/*
+  实模式（Real Mode、Real-Address Mode）：仅基于段的寻址方式。可直接访问物理地址，通用寄存器的位宽只有16位，使得寻址能力有限（1MB）
+  1.逻辑地址：Segment:Offset；Segment、Offset取值范围：0000h~FFFFh，段长度<=2^16B=64KB
+  2.线性地址=Segment<<4+Offset；Segment一定按16B边界对齐，段长度<=2^20B=1MB（可通过Big Real Mode模式将寻址能力提高至4GB）
+  3.实模式的段机制仅规定逻辑地址和线性地址之间的转换方式，没有限制访问目标段的权限，使得应用程序可以对系统核心进行操作
+
+  保护模式：体现在对系统核心进行操作需要有足够权限，在处理器级别防止程序破坏其它程序/数据
+  1.全新的分段管理机制（必选，扩大了处理器的寻址能力和权限检测能力）和分页管理机制（可选，将分段后的线性内存空间分页立体化）
+  2.必须先经过分段管理机制将逻辑地址转换为线性地址，再经过分页管理机制将线性地址转换为物理地址
+  3.段寄存器保存的不再是段的基地址而是一个索引值（段选择子，Selector），处理器根据段选择子从段描述符表中索引出相应段描述符并加载到段寄存器
+  接着再从刚加载的段描述符中获取段的基地址
+  4.引入三种特权级类型帮助处理器检测执行权限
+  (1)当前特权级CPL：保存在CS/SS寄存器的第0~1位，表示当前程序的执行特权级（通常情况下是正在执行的代码段特权级），
+  当处理器执行不同特权级的代码段时，处理器才会修改CPL
+  (2)描述符特权级DPL：保存于描述符的DPL区域内，表示段描述符/门描述符的特权级，当处理器访问段描述符/门描述符，会对比DPL、CPL、RPL
+  (3)请求特权级RPL：保存于段选择子的第0~1位，表示段选择子的重载特权级，确保程序有足够权限去访问受保护的程序；因为RPL、CPL均用于检测目标段的访问权限，
+  所以即使程序有足够的权限（CPL足够小）去访问目标段，如果RPL权限不足，程序仍然无法访问目标段
+*/
 org 0x7c00              ;org是original的缩写，用于指定程序的起始地址；若没有使用org伪指令，则编译器把0x0000作为起始地址
                         ;主要影响绝对地址寻址指令，不同的起始地址会编译成不同的绝对地址
 ;=======程序起始物理地址：BaseOfLoader<<4+OffsetOfLoader=0x10000
-BaseOfStack equ 0x7c00      ;equ相当于C语言#define的常量，在汇编时就已经处理，不会在最终的可执行文件中占用空间
-BaseOfLoader equ 0x1000     ;提高代码的可读性和可维护性。通过使用有意义的符号名称来代替魔术数字或复杂的表达式，程序变得更容易理解和修改
+BaseOfStack equ 0x7c00
+BaseOfLoader equ 0x1000
 OffsetOfLoader equ 0x00
 
+jmp short Label_Start       ;跳转至主程序启动函数
+nop                         ;空指令nop汇编后占1B，jmp指令占2B
 RootDirSectors equ 14   ;根目录占用的扇区数14=(根目录容纳目录项数224*每个目录项大小32B+每个扇区字节数-1)/每个扇区字节数512
 SectorNumOfRootDirStart equ 19  ;根目录起始扇区号19=保留扇区数1+FAT表扇区数9*FAT表份数2
 SectorNumOfFAT1Start equ 1  ;FAT1表的起始扇区号为1（因为FAT表1前只有一个保留扇区（引导扇区）且扇区号为0）
 SectorBalance equ 17    ;因为FAT[0]与FAT[1]簇为无效簇，所以将根目录起始扇区号-2，则间接将数据区起始扇区号-2
-
-jmp short Label_Start       ;跳转至主程序启动函数
-nop                         ;空指令nop汇编后占1B，jmp指令占2B
+;=======FAT12文件系统不仅包含Boot程序，还有FAT12文件系统的组成结构信息；相当于EXT类文件系统的superblock结构
 BS_OEMName db 'MINEboot'    ;软盘生产厂家名称
 BPB_BytesPerSec dw 512      ;每个扇区占用字节数，可能是512B，1024B，2048B，4096B
 BPB_SecPerClus db 1         ;每个簇占用扇区数，取值必须是2的幂次（从2的0次方开始）
@@ -32,7 +114,7 @@ BS_VolID dd 0               ;卷序列号
 BS_VOlLab db 'boot loader'  ;卷标，即Windows和Linux中的磁盘名
 BS_FileSysType db 'FAT12   '   ;文件系统类型，字段可自定义任意值，操作系统不依靠该字段识别文件系统
 
-;=======接下来是主程序启动函数
+;=======以上为FAT12文件系统引导扇区数据，接下来是主程序启动函数
 Label_Start:
 	mov ax,cs
 	mov ds,ax
@@ -75,7 +157,7 @@ Label_Start:
 
 ;=======有了软盘读取功能，可在其基础上实现目标文件搜索功能
 ;=======从FAT12文件系统搜索引导加载程序loader.bin
-    mov word [SectorNo],SectorNumOfRootDirStart ;DS:SectorNo=SectorNumOfRootDirStart根目录的起始扇区号19
+    mov word [SectorNo],SectorNumOfRootDirStart ;根目录的起始扇区号存放在DS:SectorNo处=19
 ;=======在根目录搜索与LoaderFileName标号相同的目录项
 Label_Search_In_Root_Dir_Begin:
     ;初始时(DS:RootDirSizeForLoop)=RootDirSectors=根目录占用的扇区数14
@@ -153,7 +235,7 @@ Label_FileName_Found:
     mov ax,BaseOfLoader
     mov es,ax                   ;ES=AX=BaseOfLoader 0x1000
     mov bx,OffsetOfLoader       ;BX=OffsetOfLoader 0x00；ES:BX即为loader.bin程序在内存中的起始地址
-    mov ax,cx                   ;AX=CX=CX（ES:DI）+SectorBalance（数据区起始扇区号17）
+    mov ax,cx                   ;AX=CX（ES:DI）+SectorBalance（数据区起始扇区号17）
 ;=======将loader.bin程序对应的磁盘簇读入内存
 ;=======int 10h,AH=0EH功能：在屏幕上显示一个字符
 Label_Go_On_Loading_File:
@@ -170,12 +252,12 @@ Label_Go_On_Loading_File:
     pop ax                      
     call Fun_GetFATEntry        ;每读入一个扇区的数据就通过Fun_GetFATEntry取得下一个FAT表项
     cmp ax,0fffh                ;直到Fun_GetFATEntry返回的FAT表项值为0FFFH为止
-    jz Label_File_Loaded        ;若(AX)=0FFFH则跳转至Label_File_Loaded标号处往下执行
+    jz Label_File_Loaded        ;若AX=0FFFH则跳转至Label_File_Loaded标号处往下执行
     push ax
-    mov dx,RootDirSectors       ;(DX)=RootDirSectors根目录占用的扇区数14
-    add ax,dx                   ;(AX)=(AX)+(DX)
-    add ax,SectorBalance        ;(AX)=(AX)+SectorBalance
-    add bx,[BPB_BytesPerSec]    ;(BX)=(BX)+(DS:BPB_BytesPerSec)每个扇区占用字节数512B
+    mov dx,RootDirSectors       ;DX=RootDirSectors 根目录占用的扇区数14
+    add ax,dx                   ;AX=AX+DX
+    add ax,SectorBalance        ;AX=AX+SectorBalance
+    add bx,[BPB_BytesPerSec]    ;BX=BX+(DS:BPB_BytesPerSec) 每个扇区占用字节数512B
     jmp Label_Go_On_Loading_File;继续读loader.bin的下一个磁盘簇
 ;======准备跳转至loader.bin程序处执行
 Label_File_Loaded:
@@ -193,7 +275,7 @@ Func_ReadOneSector:         ;设置好int 13h,AH=02h：读取磁盘扇区功能�
     sub esp,2               ;从栈中开辟2B的存储空间（栈指针向下移动2B）
     mov byte [bp-2],cl      ;bp-2与esp指向同一内存地址，CL保存在刚开辟的栈空间
     push bx                 ;即将使用BX寄存器，应入栈保存
-    mov bl,[BPB_SecPerTrk]  ;BL=每磁道扇区数
+    mov bl,[BPB_SecPerTrk]  ;BL=(DS:BPB_SecPerTrk) 每磁道扇区数
     div bl                  ;8位无符号数除法指令；AX=待读取磁盘LBA起始扇区号；BL=每磁道扇区数；AX/BL=AL......AH
     inc ah                  ;余数AH=目标磁道内起始扇区号；因为起始扇区号从1开始计数，所以AH+1
     mov cl,ah               ;CL=最终读取的扇区号
@@ -202,7 +284,7 @@ Func_ReadOneSector:         ;设置好int 13h,AH=02h：读取磁盘扇区功能�
     mov ch,al               ;CH=AL>>1，最终读取的柱面号
     and dh,1                ;DH=DH&1，最终读取的磁头号
     pop bx                  ;BX使用完毕，恢复BX  
-    mov dl,[BS_DrvNum]      ;DL=驱动器号（如果操作的是硬盘驱动器，bit 7必须被置位）
+    mov dl,[BS_DrvNum]      ;DL=(DS:BS_DrvNum) 驱动器号（如果操作的是硬盘驱动器，bit 7必须被置位）
 Label_Go_On_Reading:        ;循环读取
     mov ah,2                ;AH=int 13h的子功能号：读取磁盘扇区
     mov al,byte [bp-2]      ;AL=CL=(DS:BP-2)=要读取的扇区号（1～63）
@@ -230,7 +312,7 @@ Fun_GetFATEntry:
 ;=======FAT表项号为偶数
 Lable_Even:
     xor dx,dx                   ;将DX寄存器清零
-    mov bx,[BPB_BytesPerSec]    ;BX=(DS:BPB_BytesPerSec)每个扇区字节数
+    mov bx,[BPB_BytesPerSec]    ;BX=(DS:BPB_BytesPerSec) 每个扇区字节数
     div bx                      ;16位无符号数除法指令，DX:AX/BX=AX（FAT表项偏移扇区号）......DX（FAT表项偏移位置）
     push dx                     ;DX在Func_ReadOneSector子过程内被调用，先压栈保存
     mov bx,8000h
@@ -260,4 +342,4 @@ LoaderFileName: db "LOADER  BIN",0
 ;=======用0填充当前扇区剩余空间
 	times 510-($-$$) db 0   ;$表示当前行被编译后的地址；$$表示当前节（Section）：Label_Start的起始地址
 	dw 0xaa55
-	times 1474560-($-$$) db 0   ;为剩下的2879个扇区填充0，是使用cp loader.bin /media引入loader.bin的必要前提
+times 1474560-($-$$) db 0   ;为剩下的2879个扇区填充0，是使用cp loader.bin /media引入loader.bin的必要前提

@@ -31,7 +31,6 @@ extern char _bss;		//进程.bss段起始地址
 extern char _ebss;		//进程.bss段结束地址
 extern char _end;		//进程程序结束地址
 extern unsigned long _stack_start;	//进程栈起始地址，在head.S中作为汇编语句的标号入口Entry(_stack_start)
-extern void ret_from_intr();	//从外部中断返回，在entry.S中作为汇编语句的标号入口Entry(ret_from_intr)
 
 /*
   内存空间分布结构体：描述进程的页表结构和各程序段信息（页目录基地址、代码段、数据段、只读数据段、应用层栈地址等）
@@ -245,7 +244,7 @@ inline struct task_struct *get_current()
 	return current;
 }
 
-#define current get_current()	//宏定义，current宏即调用get_current()函数
+#define current get_current()	//宏定义，current宏即调用get_current()函数，得到指向当前进程结构体的指针
 
 /*
   宏函数：借鉴Linux源码，用于获得当前struct task_struct结构体（借助Kernel.lds的32KB对齐技巧）与get_current()函数实现的功能相同
@@ -307,6 +306,45 @@ do									\
 	);								\
 } while (0)
 
+#define MAX_SYSTEM_CALL_NR 128		//当前系统调用函数暂时定义为128个
+typedef unsigned long (*system_call_t)(struct pt_regs *regs);
+
+/*
+  函数：默认系统调用处理函数（第0号系统调用API）
+  参数：
+  1.struct pt_regs *regs：记录着进程的执行环境，成员变量rax保存系统调用API的向量号
+  返回值：unsigned long，暂时取-1
+*/
+inline unsigned long no_system_call(struct pt_regs *regs)
+{
+	color_printk(RED,BLACK,"no_system_call is calling,NR:%#04x\n",regs->rax);
+	return -1;
+}
+
+/*
+  函数：字符串打印功能（第1号系统调用API）
+  参数：
+  1.struct pt_regs *regs：记录着进程的执行环境，成员变量rax保存系统调用API的向量号
+  返回值：unsigned long，暂时取1
+*/
+
+inline unsigned long sys_printf(struct pt_regs *regs)
+{
+	color_printk(BLACK,WHITE,(char *)regs->rdi);	//借助RDI寄存器向color_printk传递待打印字符串
+	return 1;
+}
+
+system_call_t system_call_table[MAX_SYSTEM_CALL_NR]=
+{
+	[0]=no_system_call,//task.h中struct tss_struct init_tss定义也使用了指定初始化范围
+	[1]=sys_printf,
+	[2 ... MAX_SYSTEM_CALL_NR-1]=no_system_call
+};
+
 void task_init();
+unsigned long do_fork(struct pt_regs *regs,unsigned long clone_flags,unsigned long stack_start,unsigned long stack_size);
+void user_level_function();
+extern void ret_from_intr();	//从外部中断返回，在entry.S中作为汇编语句的标号入口Entry(ret_from_intr)
+extern void ret_system_call();//从系统调用返回，在entry.S中作为汇编语句的标号入口Entry(ret_system_call)
 
 #endif

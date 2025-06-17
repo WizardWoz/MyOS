@@ -110,7 +110,7 @@ ENTRY(ret_from_intr)
 */
 /*
   sysenter指令：从应用层（3特权级）快速进入内核层（0特权级），执行该指令前处理器必须为其提供0特权级的衔接程序和0特权级的栈空间（数据保存在MSR寄存器、通用寄存器）
-  由操作系统确保各个段描述符的正确性
+  由操作系统确保各个段描述符的正确性，将使RFLAGS.IF标志位=0
   1.IA32_SYSENTER_CS（MSR寄存器组0x174地址）：是一个32位寄存器（值不能为NULL），用于索引0特权级下的代码段选择子和栈段选择子
   0特权级下的代码段选择子=IA32_SYSENTER_CS[15:0]；0特权级下的栈段选择子=IA32_SYSENTER_CS[15:0]+8
   2.IA32_SYSENTER_ESP（MSR寄存器组0x175地址）：保存Canonical型地址，将会被载入到RSP寄存器（保护模式下只载入低32位）
@@ -118,6 +118,7 @@ ENTRY(ret_from_intr)
 */
 //开始进行系统调用，利用sysenter从应用层进入内核层；
 ENTRY(system_call)
+    sti
     subq $0x38,%rsp
     cld
     pushq %rax

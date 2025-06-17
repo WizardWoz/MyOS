@@ -1,3 +1,7 @@
+;通用寄存器的特殊功能：
+;EAX：用于累加操作或保存计算结果；EBX：作为DS数据段寄存器的段内偏移指针；ECX：字符串和循环操作的计数器；EDX：IO地址指针
+;ESI：DS数据段寄存器的段内偏移指针（源地址指针）；EDI：ES数据段寄存器的段内偏移指针（目标地址指针）；ESP：栈指针；EBP：栈帧（段内偏移指针）
+
 org 10000h
     jmp Label_Start
 ;跟C语言引用头文件的作用相同，fat12.inc是从Boot引导程序中提取出的FAT12文件系统结构
@@ -14,22 +18,31 @@ OffsetTmpOfKernelFile equ 0x7E00
 ;=======内核程序转存至最终物理地址后，临时转存空间可作他用，此处改为内存结构数据的存储空间
 MemoryStructBufferAddr equ 0x7E00
 
+/*
+  段选择子：CS/SS/DS等段寄存器保存
+  1.第0~1位RPL：请求特权级（0、1、2、3四个等级，数值越小特权级越高）
+  2.第2位TI：目标段描述符所在的描述符表类型（GDT/LDT）
+  3.第3~15位Index：段选择子索引，用于在GDT/LDT等描述符表中索引目标段描述符
+*/
+
 ;=======SECTION伪指令追加定义一个名为gdt的段，实际上创建了一个32位保护模式的临时GDT表
 ;=======为避免保护模式段结构的复杂性，此处将代码段和数据段的段基地址设置在0x00000000，段限长为0xFFFFFFFF，可索引4GB内存地址空间
 [SECTION gdt]
 LABEL_GDT: dd 0,0
-LABEL_DESC_CODE32: dd 0x0000FFFF,0x00CF9A00
+;LABEL_DESC_CODE32、LABEL_DESC_DATA32在kernel的head.S文件中还会出现
+LABEL_DESC_CODE32: dd 0x0000FFFF,0x00CF9A00     ;前面4B为段限长，后面4B为段基地址
 LABEL_DESC_DATA32: dd 0x0000FFFF,0x00CF9200
 GdtLen equ $-LABEL_GDT
-GdtPtr dw GdtLen-1          ;dw会向dd对齐（因为已经进入32位模式）
-       dd LABEL_GDT         ;所以临时GDT表一共占用32Bytes
+;dw会向dd对齐（因为已经进入32位模式），所以临时GDT表一共占用32Bytes
+GdtPtr dw GdtLen-1          ;存放32位临时GDT表的长度
+       dd LABEL_GDT         ;存放32位临时GDT表的起始地址
 ;SelectorCode32、SelectorData32是两个LDT段选择子，是程序局部段描述符在GDT表中的索引号
 SelectorCode32 equ LABEL_DESC_CODE32-LABEL_GDT
 SelectorData32 equ LABEL_DESC_DATA32-LABEL_GDT
-
 ;=======SECTION伪指令追加定义一个名为gdt64的段，实际上创建了一个IA-32e 64位长模式的临时GDT表
 ;=======简化了保护模式的段结构，删减掉冗余的段基地址和段限长，使段直接覆盖整个线性空间，变为平坦地址空间
 [SECTION gdt64]
+;以下三个描述符在kernel的head.S文件中还会出现
 LABEL_GDT64: dq	0x0000000000000000
 LABEL_DESC_CODE64: dq 0x0020980000000000
 LABEL_DESC_DATA64: dq 0x0000920000000000
@@ -38,17 +51,78 @@ GdtPtr64 dw GdtLen64-1
          dd	LABEL_GDT64
 SelectorCode64 equ LABEL_DESC_CODE64-LABEL_GDT64
 SelectorData64 equ LABEL_DESC_DATA64-LABEL_GDT64
-    
+
+/*
+  IA-32体系结构控制器位宽是32bit，IA-32e体系结构会将控制寄存器扩展至64bit（高32位保留使用=0）
+  通过mov crn汇编指令可对控制寄存器进行操作，其中保留位必须是数值0，否则会触发#GP异常
+  1.CR0：控制处理器的状态和运行模式
+  (1)第0位PE：开启/关闭保护模式
+  (2)第1位MP：使能WAIT指令监控
+  (3)第2位EM：检测x87 FPU协处理器
+  (4)第3位TS：延迟保存浮点处理器的数据
+  (5)第4位ET：检测Intel 387 DX协处理器
+  (6)第5位NE：选择x87 FPU的错误通知机制
+  (7)第6~15位：保留=0
+  (8)第16位WP：开启只读页的写保护
+  (9)第17位：保留=0
+  (10)第18位AM：数据对齐检测
+  (11)第19~28位：保留=0
+  (12)第29位NW：控制系统内存写穿机制
+  (13)第30位CD：控制系统内存缓存机制
+  (14)第31位PG：使能分页管理机制
+  2.CR1：第0~31位保留=0
+  3.CR2：第0~31位引起#PF异常的线性地址，不会对页错误的线性地址进行检测
+  4.CR3：记录页目录的物理基地址属性，不会对页目录基地址进行检测
+  (1)第0~2位：保留=0
+  (2)第3位PWT：页级写穿标志位
+  (3)第4位PCD：页级禁止缓存标志位
+  (4)第5~11位：保留=0
+  (3)第12~31位：页目录基地址PDB
+  5.CR4：体系结构扩展功能的使能标志位
+  (1)第0位VME：使能Virtual-8086模式的中断/异常
+  (2)第1位PVI：使能EFLAGS.VIF标志位
+  (3)第2位TSD：限制RDTSC、RDTSCP指令的执行权限
+  (4)第3位DE：使能DR4、DR5调试寄存器
+  (5)第4位PSE：允许32位分页模式使用4MB物理页
+  (6)第5位PAE：开启页管理机制的物理地址寻址扩展（PAE功能）
+  (7)第6位MCE：开启机器检测异常
+  (8)第7位PGE：开启全局页表功能
+  (9)第8位PCE：限制RDPMC指令的执行权限
+  (10)第9位OSFXSR：限制FXSAVE、FXRSTOR指令的功能
+  (11)第10位OSXMMEXCPT：允许处理器执行SIMD浮点异常（#XM）
+  (12)第11~12位：保留=0
+  (13)第13位VMXE：开启VMX功能
+  (14)第14位SMXE：开启SMX功能
+  (15)第15位：保留=0
+  (16)第16位FSGSBASE：使能RDFSBASE、WRFSBASE以及RDGSBASE、WRGSBASE指令
+  (17)第17位PCIDE：开启PCID功能
+  (18)第18位OSXSAVE：开启XSAVE、XRSTOR、XGETBV、XSETBV等指令的增强功能
+  (19)第19位：保留=0
+  (20)第20位SMEP：限制超级权限对用户程序的访问
+  (21)第21位SMAP：限制超级权限对用户数据的访问
+  (22)第22~31位：保留=0
+  6.CR8：读写访问的任务优先级，只在64位模式下有效
+  7.XCR0扩展控制寄存器：用于控制浮点计算功能
+  8.MSR寄存器组的IA32_EFER寄存器
+  (1)第0位SCE：SYSCALL/SYSRET指令（由AMD公司引入，Intel仅提供有限支持）的使能标志位（64bit模式有效）
+  (2)第1~7位：保留=0
+  (3)第8位LME：使能IA-32e模式
+  (4)第9位：保留=0
+  (5)第10位LMA：当IA32_EFER.LMA=1表明已进入IA-32e模式
+  (6)第11位NXE：开启页访问限制功能（PAE模式可用）
+  (7)第12~63位：保留=0
+*/
+
 [SECTION .s16]      ;SECTION伪指令追加定义一个名为.s16的段
 [BITS 16]           ;BITS伪指令通知NASM编译器应为16位宽的处理器生成代码
 ;当NASM编译器处于16位宽状态下，使用32位宽数据指令需要加上指令前缀0x66；使用32位宽地址指令需要加上指令前缀0x67
 Label_Start:
     mov ax,cs
     mov ds,ax
-    mov es,ax       ;AX=DS=ES=CS=0x10000
+    mov es,ax
     mov ax,0x00
-    mov ss,ax       ;SS=AX=0x0000
-    mov sp,0x7c00   ;SP=0x7C00
+    mov ss,ax
+    mov sp,0x7c00
 ;=======显示字符串：Start Loader......
 ;=======int 10h,AH=13h：显示字符串
 	;AL控制写入模式；AL=00h字符串属性由BL提供，光标位置不变；AL=01h字符串属性由BL提供，光标移动到字符串末端；
@@ -82,18 +156,18 @@ Label_Start:
     or eax,1            
     mov cr0,eax         ;CR0寄存器的第0位被置为1，开启32bit保护模式
     mov ax,SelectorData32
-    mov fs,ax           ;FS=AX=SS:SelectorData32
-    mov eax,cr0         ;目的是使FS段寄存器在实模式下的寻址能力超过1MB，即传说中的Big Real Mode模式
+    mov fs,ax           ;FS=AX=SelectorData32=LABEL_DESC_DATA32-LABEL_GDT
+    ;目的是使FS段寄存器在实模式下的寻址能力超过1MB（扩展至4GB即传说中的Big Real Mode模式），为之后的内核转存至高地址做准备
+    mov eax,cr0
     and al,11111110b    ;CR0寄存器的第0位被重新置为0，关闭保护模式
     mov cr0,eax
     sti
     ;jmp $，调试用，在Bochs终端按下Ctrl+C进入DBG调试命令行，输入sreg查看当前段状态信息，验证FS段寄存器进入Big Real Mode
 ;=======从FAT12文件系统搜索引导加载程序kernel.bin
-    ;x86汇编语言中，[]内没有指定段寄存器。默认使用DS；SS是push、pop、call、ret等指令使用的内存栈寄存器
     mov word [SectorNo],SectorNumOfRootDirStart ;根目录的起始扇区号存放在DS:SectorNo处=19
 ;=======在根目录搜索与LoaderFileName标号相同的目录项
 Label_Search_In_Root_Dir_Begin:
-    ;初始时(DS:RootDirSizeForLoop)=(DS:RootDirSectors)=根目录占用的扇区数14
+    ;初始时(DS:RootDirSizeForLoop)=RootDirSectors=根目录占用的扇区数14
     cmp word [RootDirSizeForLoop],0     ;判断当前是否已经到达根目录最后一个扇区
     jz Label_No_KernelBin               ;若为0则ZF标志位=1表示找不到目录项，跳转到Label_No_KernelBin作处理
     dec word [RootDirSizeForLoop]       ;根目录扇区数大小减少2B
@@ -106,7 +180,8 @@ Label_Search_In_Root_Dir_Begin:
     call Func_ReadOneSector     ;读入属于根目录的第一个扇区；call指令等同于push IP；jmp Func_ReadOneSector
     mov si,KernelFileName       ;将kernel.bin文件名标号所在地址放入si，源数据地址为DS:SI=KernelFileName标号地址
     mov di,8000h                ;要比对的FAT目录项名称数据地址为ES:DI=08000H
-    cld                         ;因为后面用到lodsb指令（与DF标志位有关），所以清除DF标志位
+    ;因为后面用到lodsb指令（与DF标志位有关），所以清除DF方向标志位，确保从内存区域的开头开始逐个加载数据到累加器（正向加载）
+    cld
     mov dx,10h                  ;DX=每个扇区可容纳FAT12目录项个数=512/32=16=0x10
 ;=======在第一个扇区内依据文件名“KERNEL  BIN”搜索每个FAT12目录项
 Label_Search_For_KernelBin:
@@ -147,7 +222,7 @@ Label_No_KernelBin:
     ;bit4～6为背景颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
     ;bit7为字体闪烁：0：不闪烁、1：字体闪烁
     mov bx,008ch
-    mov dx,0100h       ;DH=游标坐标列号，DL=游标坐标行号
+    mov dx,0300h       ;DH=游标坐标列号，DL=游标坐标行号
     mov cx,21          ;CX=字符串长度；若AL=00h则长度以Byte为单位，若AL=02h则长度以Word为单位
     push ax
     mov ax,ds
@@ -180,7 +255,7 @@ Label_Go_On_Loading_File:
     int 10h                     ;每读入一个磁盘簇（一个扇区），显示一个'.'
     pop bx
     pop ax
-    mov cl,1                    ;读取loader.bin文件的第1个扇区
+    mov cl,1                    ;以单个扇区方式读取loader.bin文件
     call Func_ReadOneSector     
     pop ax
     push cx
@@ -192,7 +267,7 @@ Label_Go_On_Loading_File:
     mov cx,200h                 ;CX=0x200，设置Label_Move_Kernel内核转存过程的循环次数
     mov ax,BaseOfKernelFile
     mov fs,ax                   ;FS=AX=BaseOfKernelFile 0x00=内核真正的起始物理地址
-    mov edi,dword [OffsetOfKernelFileCount];EDI=(DS:OffsetOfKernelFileCount)=起始时内核转存的目标地址空间偏移值
+    mov edi,dword [OffsetOfKernelFileCount]     ;EDI=(DS:OffsetOfKernelFileCount)=起始时内核转存的目标地址空间偏移值
     mov ax,BaseTmpOfKernelAddr
     mov ds,ax                   ;DS=AX=BaseTmpOfKernelAddr 0x00=内核临时存储的物理地址
     mov esi,OffsetTmpOfKernelFile   ;ESI=OffsetTmpOfKernelFile 0x7E00
@@ -200,13 +275,14 @@ Label_Go_On_Loading_File:
 Label_Move_Kernel:
     ;因为mov指令的操作数不能同时为内存地址，所以要借助AL寄存器
     mov al,byte [ds:esi]        ;AL=(DS:ESI)，将存储在临时物理地址的kernel.bin文件的单个字节内容存放在AL
-    mov byte [fs:edi],al        ;(FS:EDI)=AL，将AL的单个字节存储到kernel.bin的真正物理地址
+    ;(FS:EDI)=AL，将AL的单个字节存储到kernel.bin的真正物理地址，因为之前已经将FS设置成Big Real Mode
+    mov byte [fs:edi],al        ;所以FS可以寻址0x10000之上的物理内存位置
     inc esi
     inc edi
     loop Label_Move_Kernel      ;继续循环，直到CX=0
     mov eax,0x1000  
     mov ds,eax                  ;DS=EAX=0x1000
-    mov dword [OffsetOfKernelFileCount],edi     ;(DS:OffsetOfKernelFileCount)=EDI=结束时内核转存的目标地址空间偏移值
+    mov dword [OffsetOfKernelFileCount],edi;(DS:OffsetOfKernelFileCount)=EDI=结束时内核转存的目标地址空间偏移值
     pop esi
     pop ds
     pop edi
@@ -217,10 +293,10 @@ Label_Move_Kernel:
     cmp ax,0fffh                ;直到Fun_GetFATEntry返回的FAT表项值为0FFFH为止
     jz Label_File_Loaded        ;若AX=0FFFH则跳转至Label_File_Loaded标号处往下执行
     push ax
-    mov dx,RootDirSectors       ;DX=RootDirSectors 根目录占用的扇区数14
+    mov dx,RootDirSectors       ;DX=RootDirSectors根目录占用的扇区数14
     add ax,dx                   ;AX=AX+DX
     add ax,SectorBalance        ;AX=AX+SectorBalance
-    add bx,[BPB_BytesPerSec]    ;BX=BX+(DS:BPB_BytesPerSec) 每个扇区占用字节数512B
+    ;add bx,[BPB_BytesPerSec]    ;BX=BX+(DS:BPB_BytesPerSec)每个扇区占用字节数512B
     jmp Label_Go_On_Loading_File;继续读kernel.bin的下一个磁盘簇（当前FAT12文件系统的一个磁盘簇只包含一个扇区）
 ;======准备跳转至kernel.bin程序处执行
 Label_File_Loaded:
@@ -270,6 +346,7 @@ Label_Get_Mem_Struct:
     int 15h
     jc Label_Get_Mem_Struct_Fail    ;int 15h若使得标志寄存器EFLAGS的CF位=1，则获取失败
     add di,20
+    inc dword [MemStructNumber]     ;(DS:MemStructNumber)++
     ;int 15h成功调用后，BX会被BIOS更新为一个非零值，作为下一次调用时获取下一个内存区域描述符的句柄
     ;当BX返回0时，表示已经遍历完所有的内存区域描述符
     cmp ebx,0
@@ -280,6 +357,7 @@ Label_Get_Mem_Struct_Fail:
 ;=======int 10h子功能AH=13h：显示一行字符串
     ;AL控制写入模式；AL=00h字符串属性由BL提供，光标位置不变；AL=01h字符串属性由BL提供，光标移动到字符串末端；
     ;AL=02h字符串属性由每个字符后的单个字节提供，光标位置不变
+    mov dword [MemStructNumber],0
     mov ax,1301h
     ;BH=页码，BL=字符属性，显存物理空间为0xB8000~0xBFFFF
     ;bit0～2为字体颜色：0：黑、1：蓝、2：绿、3：青、4：红、5：紫、6：棕、7：白
@@ -417,7 +495,7 @@ Label_Get_SVGA_Mode_Info:
 	mov	al,ch
 	call Label_DispAL
 	mov	ax,00h
-	mov	al,cl	
+	mov	al,cl
 	call Label_DispAL
 	pop	ax
 	cmp	cx,0FFFFh
@@ -426,6 +504,7 @@ Label_Get_SVGA_Mode_Info:
 	int	10h
 	cmp	ax,004Fh
 	jnz	Label_Get_SVGA_Mode_Info_FAIL
+    inc	dword [SVGAModeCounter]
 	add	esi,2
 	add	edi,0x100
 	jmp	Label_Get_SVGA_Mode_Info
@@ -468,6 +547,7 @@ Label_SET_SVGA_Mode_VESA_VBE:
 	cmp	ax,004Fh
 	jnz	Label_SET_SVGA_Mode_VESA_VBE_FAIL
 ;=======初始化GDT、IDT；从16bit实模式切换到32bit保护模式
+Label_16bit_Switch_To_32bit:
 ;=======为保证代码在不同代Intel处理器上的兼容情况，建议遵循以下步骤进行模式切换
     cli                 ;1.cli禁止可屏蔽硬件中断，不可屏蔽中断NMI只能借助外部电路禁止
     db 0x66             ;当NASM编译器处于16位宽状态下，使用32位宽数据指令需要加上指令前缀0x66
@@ -504,7 +584,7 @@ GO_TO_TMP_Protect:
 	mov	esp,7E00h   ;ESP=0x00007E00
     ;jmp $   ;调试用（已成功），处理器暂停在此，Bochs虚拟机中输入Ctrl+C，然后再输入sreg查看当前段寄存器
 	call support_long_mode  ;测试处理器是否支持64位长模式
-    ;TEST指令执行op1和op2之间的按位逻辑AND运算。运算结果本身会被丢弃，但以下标志位会根据运算结果进行设置
+    ;TEST指令（32/64位模式下）执行op1和op2之间的按位逻辑AND运算。运算结果本身会被丢弃，但以下标志位会根据运算结果进行设置
     ;ZF：EAX=0则为1，EAX!=0则为0；SF：与结果最高位相同；PF：运算结果低8位包含偶数个1则为1，否则为0；CF、OF：为0；AF：未定义
 	test eax,eax
 	jz not_support_long_mode    ;若EAX=0，ZF=1则处理器不支持IA-32e
@@ -548,6 +628,7 @@ GO_TO_TMP_Protect:
 ;=======5.通过置位IA32_EFER寄存器的LME标志位激活IA-32e 64bit长模式
     ;IA32_EFER位于MSR寄存器组内，第8位是LME标志位
 	mov	ecx,0C0000080h  ;访问MSR前必须向ECX寄存器（64bit模式下RCX寄存器的高32位被忽略）传入寄存器地址
+    ;rdmsr/wrmsr必须在实模式或0特权级下执行，否则将会触发#GP异常；使用MSR寄存器组的保护地址或无效地址也会触发#GP异常
 	rdmsr   ;读取目标MSR寄存器，是由EDX:EAX组成的64位寄存器代表；EDX保存MSR寄存器的高32位，EAX保存低32位
 	bts	eax,8   ;EAX=IA32_EFER，将其第8位LME标志位置为1
 	wrmsr   ;往目标MSR寄存器写入修改好的EAX
@@ -559,13 +640,47 @@ GO_TO_TMP_Protect:
     ;至此处理器进入IA-32e模式，但是处理器目前正在执行保护模式的程序，该状态称为兼容模式
 ;=======7.需要一条跨段jmp/call指令将CS段寄存器的值更新为IA-32e的代码段描述符，则处理器真正运行在IA-32e模式
 	jmp	SelectorCode64:OffsetOfKernelFile
+
+/*
+  标志寄存器EFLAGS
+  1.状态标志：反映汇编指令计算结果的状态（add、sub、mul、div等计算类指令的奇偶性、溢出、正负......）
+  (1)第0位CF（可通过汇编指令复制/更改位值）：进位标志位，反映无符号整型计算结果的溢出状态，也可用于多倍精度计算；CF=0未发生借位或进位，CF=1发生借位或进位
+  (2)第2位PF：奇偶标志位，计算结果的奇偶校验；PF=0含奇数个1，PF=1含偶数个1
+  (3)第4位AF：辅助标志位，用于BCD算术运算；AF=0未发生借位或进位，AF=1发生借位或进位
+  (4)第6位ZF：零值标志位，反映计算结果是否为零；ZF=0计算结果不是0，ZF=1计算结果是0
+  (5)第7位SF：符号标志位，反映有符号数运算结果的正负值；SF=0计算结果为正值，SF=1计算结果为负值
+  (6)第11位OF：溢出标志位，反映有符号数运算结果的溢出状态；OF=0未发生溢出，OF=1发生溢出
+  2.方向标志
+  (1)第10位DF：方向标志位，控制字符串指令（movs、cmps、scas、lods、stos等）操作方向；CLD指令使DF=0由低地址到高地址，STD指令使DF=1由高地址到低地址
+  3.系统标志、IOPL区域：必须用有足够执行权限才能修改（0特权级）
+  (1)第8位TF：跟踪标志位，使能单步调试功能
+  (2)第9位IF（对NMI不可屏蔽中断不起作用）：中断使能标志位，使能中断（响应可屏蔽中断）
+  (3)第12~13位IOPL：IO特权级标志位，访问I/O端口地址的最低特权级
+  (4)第14位NT：任务嵌套标志位，允许任务嵌套调用
+  (5)第16位RF：恢复标志位，RF=0允许调试异常，RF=1不允许调试异常
+  (6)第17位VM：虚拟8086模式标志位，使能Virtual-8086模式
+  (7)第18位AC（只对3特权级）：对齐检测标志位，数据对齐检测
+  (8)第19位VIF（只在Virtual-8086模式有效）：虚拟中断标志位，IF中断使能标志位的虚拟镜像
+  (9)第20位VIP（只在Virtual-8086模式有效）：虚拟中断挂起标志位，中断挂起
+  (10)第21位ID：CPUID指令标志位，检测处理器是否支持CPUID指令
+  4.保留位
+  (1)第1位：保留使用=1
+  (2)第3位：保留使用=0
+  (3)第5位：保留使用=0
+  (4)第15位：保留使用=0
+  (5)第22~63位：保留使用=0
+*/
 ;=======测试当前平台是否支持64位长模式
 support_long_mode:
+    ;CPUID指令：用于鉴别处理器信息以及检测处理器支持的功能，在任何模式下的执行效果均相同
+    ;通过EFLAGS.ID可检测出处理器是否支持CPUID指令，如果支持则软件可自由操作ID标志位
     ;因为CPUID指令的扩展功能项0x80000001的第29位指示处理器是否支持IA-32e模式，所以本段程序先检测当前处理器对CPUID的支持情况
     ;只有当CPUID的扩展功能号大于等于0x80000001时，才有可能支持64bit长模式
-    ;CPUID指令无显式操作数，EAX=基础功能号/叶；ECX=扩展功能号（可选）
-	mov	eax,0x80000000      ;EAX=0x80000000获取最大扩展功能号
-	cpuid                   ;EAX、EBX、ECX、EDX存放处理器鉴定信息和机能信息
+    ;CPUID指令无显式操作数，EAX=主功能号/主叶；ECX=扩展/子功能号/子叶（可选，某些复杂功能使用）
+    ;CPUID执行结束后，EAX、EBX、ECX、EDX存放处理器鉴定信息和机能信息（结果）
+    ;基础信息和扩展信息均有主功能号；基础信息的主功能号：00h~14h；扩展信息的主功能号：80000000h~80000008h
+	mov	eax,0x80000000      ;EAX=0h获取最大基础功能号（14h）；EAX=0x80000000获取最大扩展功能号
+	cpuid
     ;输出EAX=处理器支持的最大扩展功能号 (Extended Function CPUID leaf)
     ;例如：如果返回0x80000008，表示支持从0x80000000到0x80000008的扩展功能号
 	cmp	eax,0x80000001      ;比较EAX与0x80000001的大小，若EAX>=0x80000001则CF标志位为0
@@ -612,7 +727,7 @@ Func_ReadOneSector:         ;设置好int 13h,AH=02h：读取磁盘扇区功能�
     mov ch,al               ;CH=AL>>1，最终读取的柱面号
     and dh,1                ;DH=DH&1，最终读取的磁头号
     pop bx                  ;BX使用完毕，恢复BX  
-    mov dl,[BS_DrvNum]      ;DL=驱动器号（如果操作的是硬盘驱动器，bit 7必须被置位）
+    mov dl,[BS_DrvNum]      ;DL=(DS:BS_DrvNum) 驱动器号（如果操作的是硬盘驱动器，bit 7必须被置位）
 Label_Go_On_Reading:        ;循环读取
     mov ah,2                ;AH=int 13h的子功能号：读取磁盘扇区
     mov al,byte [bp-2]      ;AL=CL=(DS:BP-2)=要读取的扇区号（1～63）
@@ -629,14 +744,14 @@ Fun_GetFATEntry:
     mov ax,00           ;AX=FAT表项号
     mov es,ax           ;ES=AX=0000h
     pop ax              
-    mov byte [Odd],0    ;将奇偶标志变量(DS:Odd)置为0
+    mov byte [Odd],0    ;将奇偶标志变量DS:Odd置为0
     mov bx,3            ;因为每个FAT表项占12 bit，1.5Byte，3Byte存放2个FAT表项，所以目录项号具有奇偶性
     mul bx              ;16位无符号数乘法指令，AX=FAT表项号，BX=3；AX*BX=DX:AX，高16位在DX，低16位在AX
     mov bx,2            ;所以将FAT表乘3除2（扩大1.5倍），来判断余数奇偶性并保存在DS:Odd中，奇数为1，偶数为0
     div bx              ;16位无符号数除法指令，DX:AX/BX=AX......DX
     cmp dx,0            ;判断余数是否为0
     jz Lable_Even       ;余数为0，ZF=1，跳转到Lable_Even
-    mov byte [Odd],1    ;将奇偶标志变量(DS:Odd)置为1
+    mov byte [Odd],1    ;将奇偶标志变量DS:Odd置为1
 ;=======FAT表项号为偶数
 Lable_Even:
     xor dx,dx                   ;将DX寄存器清零
@@ -644,13 +759,13 @@ Lable_Even:
     div bx                      ;16位无符号数除法指令，DX:AX/BX=AX（FAT表项偏移扇区号）......DX（FAT表项偏移位置）
     push dx                     ;DX在Func_ReadOneSector子过程内被调用，先压栈保存
     mov bx,8000h
-    add ax,SectorNumOfFAT1Start ;AX=AX+FAT表1的起始扇区号
+    add ax,SectorNumOfFAT1Start ;AX=AX+SectorNumOfFAT1Start FAT表1的起始扇区号
     mov cl,2                    ;CL=2，读入两个扇区
     call Func_ReadOneSector     ;解决FAT表项横跨两个扇区的问题
     pop dx                      
     add bx,dx                   ;BX=BX（8000h）+DX（FAT表项偏移位置）
     mov ax,[es:bx]              ;AX=(ES:BX)
-    cmp byte [Odd],1            ;奇偶标志变量DS:Odd与1对比
+    cmp byte [Odd],1            ;奇偶标志变量(DS:Odd)与1对比
     jnz Lable_Even_2            ;FAT目录项号为偶数跳转至Lable_Even_2处理
     shr ax,4                    ;进一步处理奇偶项错位问题，FAT目录项为奇数向右移动4位
 Lable_Even_2:
@@ -658,7 +773,7 @@ Lable_Even_2:
     pop bx
     pop es
     ret
-;=======显示保存在AL寄存器内的十六进制数值，为显示一些查询到的物理地址空间信息,AL=要显示的十六进制数
+;=======显示保存在AL寄存器内的十六进制数值，为显示一些查询到的物理地址空间信息
 Label_DispAL:
     push ecx
     push edx
@@ -675,8 +790,8 @@ Label_DispAL:
     add al,'0'      ;否则直接将其与字符'0'相加
     jmp .2
 .1:
-    sub al,0AH
-    add al,'A'
+    sub al,0AH      ;之前已经判断出AL>9，所以AL=AL-10
+    add al,'A'      ;AL=AL+'A'
 .2:
     mov [gs:edi],ax ;(GS:DisplayPosition)显示字符内存空间0xB8000H=AX
     add edi,2       ;显示一个字符需要2Bytes
@@ -687,6 +802,12 @@ Label_DispAL:
     pop edx
     pop ecx
     ret
+
+/*
+  实模式的中断向量表：计算机启动后，BIOS在物理地址0处创建中断向量表IVT（包括中断、异常）；程序运行过程中可通过LIDT和SIDT指令实现修改
+  1.IVT将中断/异常向量号与处理程序入口地址相关联（实模式采用逻辑地址Segment:Offset表示入口地址，共256项每项4B共1KB）
+  2.通常情况下实模式的IVT保存在物理地址0处
+*/
 
 ;=======为IDT开辟内存空间，因为切换至保护模式前Loader.bin已使用cli指令关闭中断，进而不必完整初始化IDT
 ;=======只须有相应的结构体即可；若能保证模式切换过程中不产生异常，没有IDT也可以
@@ -701,6 +822,8 @@ RootDirSizeForLoop dw RootDirSectors
 SectorNo dw 0
 Odd db 0
 OffsetOfKernelFileCount dd OffsetOfKernelFile
+MemStructNumber	dd 0
+SVGAModeCounter	dd 0
 DisplayPosition dd 0
 ;=======在屏幕上显示的字符串
 StartLoaderMessage: db "Start Loader"
