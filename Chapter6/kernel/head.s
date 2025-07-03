@@ -4,9 +4,9 @@
 # 1 "/usr/include/stdc-predef.h" 1 3 4
 # 1 "<命令行>" 2
 # 1 "head.S"
-# 19 "head.S"
+# 37 "head.S"
 # 1 "linkage.h" 1
-# 20 "head.S" 2
+# 38 "head.S" 2
 
 .section .text
 
@@ -31,6 +31,8 @@
  mov %ax,%ss
  movq $0x7E00,%rsp
 
+
+
  movq $0x101000,%rax
  movq %rax,%cr3
 
@@ -53,7 +55,7 @@ entry64:
  movq _stack_start(%rip),%rsp
 
 setup_IDT:
-# 79 "head.S"
+# 99 "head.S"
  leaq ignore_int(%rip),%rdx
  movq $(0x08<<16),%rax
  movw %dx,%ax
@@ -180,16 +182,14 @@ int_msg:
 
 .global _stack_start; _stack_start:
  .quad init_task_union+32768
-
-
-
-
+# 335 "head.S"
 .align 8
 
 
 
 .org 0x1000
 __PML4E:
+
 
 
  .quad 0x102007
@@ -205,6 +205,7 @@ __PDPTE:
  .fill 511,8,0
 .org 0x3000
 __PDE:
+
 
 
 
@@ -241,16 +242,16 @@ __PDE:
 
  .quad 0xe0e00087
  .fill 499,8,0
-
-
-
-
-
+# 449 "head.S"
 .section .data
 .globl GDT_Table
 GDT_Table:
     .quad 0x0000000000000000
+
+
     .quad 0x0020980000000000
+
+
     .quad 0x0000920000000000
  .quad 0x0000000000000000
  .quad 0x0000000000000000
@@ -266,7 +267,7 @@ GDT_END:
 GDT_POINTER:
 GDT_LIMIT: .word GDT_END-GDT_Table-1
 GDT_BASE: .quad GDT_Table
-
+# 488 "head.S"
 .globl IDT_Table
 IDT_Table:
  .fill 512,8,0
